@@ -78,3 +78,6 @@ A terminal with Linux console emulation. I've started with the version created b
 
 ## For developers
 For those who are eager to know "How it's done?" can find information on development tasks, goals, solutions, implementation details, and build instructions on the [Wiki](https://github.com/trunkmaster/nextspace/wiki).
+
+## To be done:
+* merge other forks when they don't conflict into this one to keep it updated.

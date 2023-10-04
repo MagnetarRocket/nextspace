@@ -355,7 +355,7 @@ WDefaultEntry optionList[] = {
   {"AutoFocus", "YES", NULL, &wPreferences.auto_focus, getBool, NULL, NULL, NULL},
   {"RaiseDelay", "0", NULL, &wPreferences.raise_delay, getInt, NULL, NULL, NULL},
   {"CirculateRaise", "YES", NULL, &wPreferences.circ_raise, getBool, NULL, NULL, NULL},
-  {"Superfluous", "YES", NULL, &wPreferences.superfluous, getBool, NULL, NULL, NULL},
+  {"Superfluous", "NO", NULL, &wPreferences.superfluous, getBool, NULL, NULL, NULL},
   {"StickyIcons", "YES", NULL, &wPreferences.sticky_icons, getBool, setStickyIcons, NULL, NULL},
   {"SaveSessionOnExit", "NO", NULL, &wPreferences.save_session_on_exit, getBool, NULL, NULL, NULL},
   {"ScrollableMenus", "YES", NULL, &wPreferences.scrollable_menus, getBool, NULL, NULL, NULL},
@@ -385,8 +385,8 @@ WDefaultEntry optionList[] = {
   {"NoWindowOverDock", "YES", NULL, &wPreferences.no_window_over_dock, getBool, updateUsableArea, NULL, NULL},
   {"NoWindowOverIcons", "YES", NULL, &wPreferences.no_window_over_icons, getBool, updateUsableArea, NULL, NULL},
   {"WindowPlaceOrigin", "(100, 100)", NULL, &wPreferences.window_place_origin, getCoord, NULL, NULL, NULL},
-  {"ResizeDisplay", "titlebar", seGeomDisplays, &wPreferences.size_display, getEnum, NULL, NULL, NULL},
-  {"MoveDisplay", "titlebar", seGeomDisplays, &wPreferences.move_display, getEnum, NULL, NULL, NULL},
+  {"ResizeDisplay", "Titlebar", seGeomDisplays, &wPreferences.size_display, getEnum, NULL, NULL, NULL},
+  {"MoveDisplay", "Titlebar", seGeomDisplays, &wPreferences.move_display, getEnum, NULL, NULL, NULL},
   {"DontConfirmKill", "NO", NULL, &wPreferences.dont_confirm_kill, getBool, NULL, NULL, NULL},
   {"WindowTitleBalloons", "NO", NULL, &wPreferences.window_balloon, getBool, NULL, NULL, NULL},
   {"MiniwindowTitleBalloons", "YES", NULL, &wPreferences.miniwin_title_balloon, getBool, NULL, NULL, NULL},
@@ -2258,7 +2258,9 @@ static int setStickyIcons(WScreen * scr, WDefaultEntry * entry, void *bar, void 
 
   if (scr->desktops) {
     wDesktopForceChange(scr, scr->current_desktop, NULL);
-    wArrangeIcons(scr, False);
+    if (wPreferences.auto_arrange_icons) {
+      wArrangeIcons(scr, False);
+    }
   }
   return 0;
 }
@@ -2859,7 +2861,9 @@ static int setIconPosition(WScreen *scr, WDefaultEntry *entry, void *bar, void *
   (void) foo;
 
   wScreenUpdateUsableArea(scr);
-  wArrangeIcons(scr, True);
+  if (wPreferences.auto_arrange_icons) {
+    wArrangeIcons(scr, True);
+  }
 
   return 0;
 }

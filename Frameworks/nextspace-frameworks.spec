@@ -114,7 +114,9 @@ cd ..
 /usr/NextSpace/Sounds
 
 %files devel
-/usr/NextSpace/include
+/usr/NextSpace/include/SystemKit
+/usr/NextSpace/include/DesktopKit
+/usr/NextSpace/include/SoundKit
 
 #
 # Package install
@@ -131,6 +133,7 @@ cd ..
 #%preun
 
 %postun
+/bin/rm -rf /usr/NextSpace/Frameworks/DesktopKit.framework
 /bin/rm /etc/fonts/conf.d/25-nextspace-fonts.conf
 /sbin/ldconfig
 

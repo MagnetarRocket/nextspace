@@ -29,14 +29,14 @@
 // Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.
 //
 
-#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 
-#import <Operations/ProcessManager.h>
+#import <Processes/ProcessManager.h>
 
 @interface Processes : NSObject
 {
   ProcessManager *manager;
-  
+
   int displayedFop;
 
   // Process.nib
@@ -48,7 +48,7 @@
   // AppProcessUI.nib
   id appBogusWindow;
   id appBox;
-  id appList; // should be procList: shared table for Apps and BGProcessess
+  id appList;  // should be procList: shared table for Apps and BGProcessess
   id appIcon;
   id appKillBtn;
   id appName;
@@ -89,4 +89,3 @@
 - (void)updateBGProcessList;
 
 @end
-

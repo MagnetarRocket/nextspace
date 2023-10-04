@@ -1,8 +1,8 @@
 %define GS_REPO		https://github.com/gnustep
-%define BASE_VERSION	1_28_0
-%define GUI_VERSION	nextspace
-%define BACK_VERSION	nextspace
-%define GORM_VERSION	master
+%define BASE_VERSION	master
+%define GUI_VERSION	master
+%define BACK_VERSION	master
+%define GORM_VERSION	1_3_1
 %define PC_VERSION	master
 
 Name:           nextspace-gnustep
@@ -13,18 +13,25 @@ Summary:        GNUstep libraries.
 Group:          Libraries/NextSpace
 License:        GPLv3
 URL:		http://www.gnustep.org
-Source0:	%{GS_REPO}/libs-base/archive/base-%{BASE_VERSION}.tar.gz
-Source1:	gdomap.interfaces
-Source2:	gdomap.service
-Source3:	gdnc.service
-Source4:	gdnc-local.service
-Source5:	%{GS_REPO}/libs-gui/archive/gnustep-gui-%{GUI_VERSION}.tar.gz
-Source6:	gnustep-gui-images.tar.gz
-Source7:	back-art.tar.gz
-Source8:	gpbs.service
-Source9:	gorm-master.tar.gz
-Source10:	projectcenter-master.tar.gz
-Source11:	projectcenter-images.tar.gz
+Source0:        libs-base-%{BASE_VERSION}.tar.gz
+Source1:        libs-gui-%{GUI_VERSION}.tar.gz
+Source2:        libs-back-%{BACK_VERSION}.tar.gz
+Source3:        %{GS_REPO}/apps-gorm/archive/gorm-%{GORM_VERSION}.tar.gz
+Source4:        projectcenter-%{PC_VERSION}.tar.gz
+Source5:        gdomap.interfaces
+Source6:        gdomap.service
+Source7:        gdnc.service
+Source8:        gdnc-local.service
+Source9:        gpbs.service
+Source10:       projectcenter-images.tar.gz
+Source11:       gorm-images.tar.gz
+Source12:       gnustep-gui-images.tar.gz
+Source13:       gnustep-gui-panels.tar.gz
+
+Patch0:         libs-gui.patch
+Patch1:         libs-back.patch
+Patch2:         gorm.patch
+Patch3:         pc.patch
 
 # Build GNUstep libraries in one RPM package
 Provides:	gnustep-base-%{BASE_VERSION}
@@ -127,7 +134,19 @@ OpenStep Application Kit, Foundation Kit and GNUstep extensions header files.
 GNUstep Make installed with nextspace-core-devel package.
 
 %prep
-%setup -c -n nextspace-gnustep -a 5 -a 7 -a 9 -a 10
+%setup -c -n nextspace-gnustep -a 0 -a 1 -a 2 -a 3 -a 4
+cp %{_sourcedir}/libs-gui.patch %{_builddir}/nextspace-gnustep/libs-gui-%{GUI_VERSION}/
+cd %{_builddir}/nextspace-gnustep/libs-gui-%{GUI_VERSION}/
+%patch0 -p1
+cp %{_sourcedir}/libs-back.patch %{_builddir}/nextspace-gnustep/libs-back-%{BACK_VERSION}/
+cd %{_builddir}/nextspace-gnustep/libs-back-%{BACK_VERSION}/
+%patch1 -p1
+cp %{_sourcedir}/gorm.patch %{_builddir}/nextspace-gnustep/apps-gorm-gorm-%{GORM_VERSION}/
+cd %{_builddir}/nextspace-gnustep/apps-gorm-gorm-%{GORM_VERSION}/
+%patch2 -p1
+cp %{_sourcedir}/pc.patch %{_builddir}/nextspace-gnustep/apps-projectcenter-%{PC_VERSION}/
+cd %{_builddir}/nextspace-gnustep/apps-projectcenter-%{PC_VERSION}/
+%patch3 -p1
 rm -rf %{buildroot}
 
 #
@@ -143,7 +162,7 @@ export CXX=clang++
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"%{buildroot}/Library/Libraries:/usr/NextSpace/lib"
 
 # Foundation (relies on gnustep-make included in nextspace-core-devel)
-cd libs-base-base-%{BASE_VERSION}
+cd libs-base-%{BASE_VERSION}
 ./configure
 make
 %{make_install}
@@ -154,7 +173,8 @@ export ADDITIONAL_LIB_DIRS=" -L%{buildroot}/Library/Libraries"
 export PATH+=":%{buildroot}/Library/bin:%{buildroot}/usr/NextSpace/bin"
 
 # Application Kit
-cd libs-gui-gnustep-gui-%{GUI_VERSION}
+cd libs-gui-%{GUI_VERSION}
+tar xzf %{_sourcedir}/gnustep-gui-panels.tar.gz
 sudo cp %{buildroot}/Developer/Makefiles/Additional/base.make /Developer/Makefiles/Additional/
 ./configure
 make
@@ -163,8 +183,7 @@ sudo rm /Developer/Makefiles/Additional/base.make
 cd ..
 
 # Build ART GUI backend
-#cd libs-back-gnustep-back-%{BACK_VERSION}
-cd back-art
+cd libs-back-%{BACK_VERSION}
 export ADDITIONAL_TOOL_LIBS="-lgnustep-gui -lgnustep-base"
 ./configure \
     --enable-server=x11 \
@@ -177,12 +196,14 @@ cd ..
 # Build GORM
 export ADDITIONAL_OBJCFLAGS="-I%{buildroot}/Developer/Headers"
 export ADDITIONAL_LDFLAGS+="-L%{buildroot}/Library/Libraries -lgnustep-base -lgnustep-gui"
-cd apps-gorm-%{GORM_VERSION}
+cd apps-gorm-gorm-%{GORM_VERSION}
+tar zxf %{_sourcedir}/gorm-images.tar.gz
 make
 cd ..
 
 # Build ProjectCenter
 cd apps-projectcenter-%{PC_VERSION}
+tar zxf %{_sourcedir}/projectcenter-images.tar.gz
 make
 cd ..
 
@@ -193,28 +214,25 @@ cd ..
 export GNUSTEP_MAKEFILES=/Developer/Makefiles
 export PATH+=":%{buildroot}/Library/bin:%{buildroot}/usr/NextSpace/bin"
 export QA_SKIP_BUILD_ROOT=1
-
-cd libs-base-base-%{BASE_VERSION}
+# Install Base
+cd libs-base-%{BASE_VERSION}
 %{make_install}
 cd ..
-
-cd libs-gui-gnustep-gui-%{GUI_VERSION}
+# Install GUI
+cd libs-gui-%{GUI_VERSION}
 %{make_install}
 cd ..
-
-#cd libs-back-gnustep-back-%{BACK_VERSION}
-cd back-art
+# Install Back
+cd libs-back-%{BACK_VERSION}
 %{make_install} fonts=no
 cd ..
-
 # Install GORM
 export GNUSTEP_INSTALLATION_DOMAIN=NETWORK
-cd apps-gorm-%{GORM_VERSION}
+cd apps-gorm-gorm-%{GORM_VERSION}
 %{make_install}
 cd ..
 # Install ProjectCenter
 cd apps-projectcenter-%{PC_VERSION}
-tar zxf %{_sourcedir}/projectcenter-images.tar.gz
 %{make_install}
 cd ..
 
@@ -245,6 +263,7 @@ cd ..
 # for %pre and %post $1 = 1 - installation, 2 - upgrade
 #%pre
 %post
+libs -p /sbin/ldconfig
 if [ $1 -eq 1 ]; then
     # post-installation
     systemctl enable /usr/NextSpace/lib/systemd/gdomap.service;
@@ -274,7 +293,8 @@ elif  [ $1 -eq 1 ]; then
     echo "This is an upgrade. Do nothing with GNUstep services.";
 fi
 
-#%postun
+%postun
+/bin/rm -rf /usr/NextSpace/Preferences/
 
 %changelog
 * Thu Apr 30 2020 Sergii Stoian <stoyan255@gmail.com> - 1_27_0_nextspace-1

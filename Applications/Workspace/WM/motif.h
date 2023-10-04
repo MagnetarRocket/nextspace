@@ -20,9 +20,10 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-
 #ifndef __WORKSPACE_WM_MOTIF__
 #define __WORKSPACE_WM_MOTIF__
+
+#include "window.h"
 
 void wMWMCheckClientHints(WWindow *wwin);
 

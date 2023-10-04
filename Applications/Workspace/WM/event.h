@@ -24,13 +24,16 @@
 #ifndef __WORKSPACE_WM_EVENT__
 #define __WORKSPACE_WM_EVENT__
 
+#include <X11/Xlib.h>
+#include <sys/types.h>
 #include "config.h"
+#include "window.h"
 
 #ifdef HAVE_STDNORETURN
 #include <stdnoreturn.h>
 #endif
 
-typedef void (WDeathHandler)(pid_t pid, unsigned int status, void *cdata);
+typedef void(WDeathHandler)(pid_t pid, unsigned int status, void *cdata);
 
 void WMRunLoop_V0(void);
 void WMRunLoop_V1(void);

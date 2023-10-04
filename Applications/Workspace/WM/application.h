@@ -25,6 +25,13 @@
 #define __WORKSPACE_WM_APPLICATION__
 
 #include <CoreFoundation/CFArray.h>
+#include <CoreFoundation/CFDictionary.h>
+#include <CoreFoundation/CFRunLoop.h>
+
+#include <X11/X.h>
+#include <X11/Xproto.h>
+
+#include "menu.h"
 
 /* for tracking single application instances */
 typedef struct WApplication {
@@ -35,12 +42,12 @@ typedef struct WApplication {
 
   CFStringRef appName;
   CFMutableDictionaryRef appState;
-  
+
   Window main_window;               /* ID of the group leader */
   struct WWindow *main_wwin;        /* main (leader) window */
   struct WAppIcon *app_icon;
   struct WWindow *last_focused;     /* focused window before hide or switch to other */
-  int last_desktop;               /* last workspace the app used to work on */
+  int last_desktop;                 /* last workspace the app used to work on */
   
   CFMutableArrayRef windows;
   struct WWindow *gsmenu_wwin;      /* GNUstep application menu window */
@@ -49,13 +56,13 @@ typedef struct WApplication {
 
   CFRunLoopTimerRef urgent_bounce_timer;
   struct {
-    unsigned int is_gnustep:1;
-    unsigned int skip_next_animation:1;
-    unsigned int hidden:1;
-    unsigned int emulated:1;
-    unsigned int bouncing:1;
+    unsigned int is_gnustep : 1;
+    unsigned int skip_next_animation : 1;
+    unsigned int hidden : 1;
+    unsigned int emulated : 1;
+    unsigned int bouncing : 1;
   } flags;
-  
+
 } WApplication;
 
 void wApplicationAddWindow(WApplication *wapp, struct WWindow *wwin);

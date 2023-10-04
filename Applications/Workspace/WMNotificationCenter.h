@@ -21,10 +21,8 @@
 
 #import <Foundation/NSNotification.h>
 #import <Foundation/NSDistributedNotificationCenter.h>
-#include <CoreFoundation/CFNotificationCenter.h>
 
-#include <CoreFoundation/CFString.h>
-#import <Foundation/NSString.h>
+#include <CoreFoundation/CFNotificationCenter.h>
 
 // #import <AppKit/AppKitDefines.h>
 // APPKIT_EXPORT NSString *GSWorkspaceNotification;
@@ -43,4 +41,5 @@
 @property (readwrite) const void *object;
 @end
 
-#define CF_NOTIFICATION(X) ([NSString stringWithCString:CFStringGetCStringPtr((X), CFStringGetSystemEncoding())])
+#define CF_NOTIFICATION(X) \
+  ([NSString stringWithCString:CFStringGetCStringPtr((X), CFStringGetSystemEncoding())])

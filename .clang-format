@@ -1,0 +1,24 @@
+BasedOnStyle: Google
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakBeforeMultilineStrings: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterEnum: false
+  AfterFunction: true
+  AfterObjCDeclaration: true
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeWhile: false
+  IndentBraces: false
+ObjCSpaceAfterProperty: true
+ObjCSpaceBeforeProtocolList: true
+AllowAllArgumentsOnNextLine: false
+PointerAlignment: Right
+ColumnLimit: 100
+SortIncludes: Never

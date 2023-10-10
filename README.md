@@ -80,4 +80,6 @@ A terminal with Linux console emulation. I've started with the version created b
 For those who are eager to know "How it's done?" can find information on development tasks, goals, solutions, implementation details, and build instructions on the [Wiki](https://github.com/trunkmaster/nextspace/wiki).
 
 ## To be done:
-* merge other forks when they don't conflict into this one to keep it updated.
+* Merge other forks when they don't conflict into this one to keep it updated.
+* Remove all OG nextstep art in favor of orignal art
+* Give the UI a openstep 4.0 beta look(much later on me thinks)

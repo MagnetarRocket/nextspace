@@ -24,4 +24,4 @@ Applications/Workspace/WM/compile
 *.deps
 *.dir
 *~
-Applications/Workspace/.DS_Store
+*.DS_Store

@@ -20,6 +20,7 @@
 //
 
 #import <sys/types.h>
+#include "Foundation/NSValue.h"
 #import <signal.h>
 
 #import <DesktopKit/NXTAlert.h>
@@ -253,24 +254,7 @@ static Processes *shared = nil;
   if (NXTRunAlertPanel(_(@"Kill application"), _(@"Really kill application %@?"), _(@"Cancel"),
                        _(@"Kill"), nil,
                        [appInfo objectForKey:@"NSApplicationName"]) != NSAlertDefaultReturn) {
-    NSString *pidListString;
-    NSMutableArray *pidList;
-
-    pidList = [appInfo objectForKey:@"NSApplicationProcessIdentifier"];
-    for (NSString *pidString in pidList) {
-      kill([pidString intValue], SIGKILL);
-    }
-
-    if (![[appInfo objectForKey:@"IsXWindowApplication"]
-            isEqualToString:@"YES"]) {  // GNUstep app: send notification to remove app from list
-      NSNotification *notif;
-
-      notif = [NSNotification notificationWithName:NSWorkspaceDidTerminateApplicationNotification
-                                            object:nil
-                                          userInfo:appInfo];
-
-      [[[NSWorkspace sharedWorkspace] notificationCenter] postNotification:notif];
-    }
+    [manager sendSignal:SIGKILL toApplication:appInfo];
   }
 
   if (appList != nil) {
@@ -286,7 +270,6 @@ static Processes *shared = nil;
   NSImage *icon;
   NSString *name, *path;
   NSOrderedSet *pid;
-
   NSWorkspace *ws = [NSWorkspace sharedWorkspace];
 
   if ([appList selectedRow] < 0)
@@ -295,34 +278,32 @@ static Processes *shared = nil;
   appInfo = [[manager applications] objectAtIndex:[appList selectedRow]];
 
   // Name
-  name = [appInfo objectForKey:@"NSApplicationName"];
+  name = appInfo[@"NSApplicationName"];
   [appName setStringValue:name];
 
   // Status: and Path:
   if ([appInfo objectForKey:@"StartingUp"] != nil) {
     [appStatus setStringValue:_(@"Starting up")];
-    path = [ws fullPathForApplication:[appInfo objectForKey:@"NSApplicationName"]];
+    path = [ws fullPathForApplication:appInfo[@"NSApplicationName"]];
   } else {
     [appStatus setStringValue:_(@"Running")];
-    path = [appInfo objectForKey:@"NSApplicationPath"];
+    path = appInfo[@"NSApplicationPath"];
   }
   [appPath setStringValue:path];
 
   // Process ID:
-  pid = [appInfo objectForKey:@"NSApplicationProcessIdentifier"];
+  pid = appInfo[@"NSApplicationProcessIdentifier"];
   [appPID setStringValue:[[pid array] componentsJoinedByString:@", "]];
 
   // Icon
-  icon = [appInfo objectForKey:@"NSApplicationIcon"];
-  // TODO: icons of X11 applications after restart of Workspace changing
-  // into GSMutableString.
+  icon = appInfo[@"NSApplicationIcon"];
   // NSLog(@"showApp: icon class name: %@ [%@]", [icon className], icon);
   if ([name isEqualToString:@"Workspace"]) {
     [appIcon setImage:[NSApp applicationIconImage]];
   } else if (icon && [icon isKindOfClass:[NSImage class]]) {
     [appIcon setImage:(NSImage *)icon];
-  } else if ([pid containsObject:@"-1"] ||
-             [[appInfo objectForKey:@"IsXWindowApplication"] isEqualToString:@"YES"]) {
+  } else if ([pid containsObject:[NSNumber numberWithInt:-1]] ||
+             [appInfo[@"IsXWindowApplication"] isEqualToString:@"YES"]) {
     [appIcon setImage:[NSImage imageNamed:@"XWindow"]];
   } else {
     [appIcon setImage:[ws iconForFile:path]];
@@ -330,7 +311,7 @@ static Processes *shared = nil;
 
   // Apps with empty "" or unknown "-1" PIDs should not be added?
   // We can't manage them.
-  if ([pid containsObject:@"-1"] || [pid containsObject:@""] ||
+  if ([pid containsObject:[NSNumber numberWithInt:-1]] || [pid containsObject:@""] ||
       [name isEqualToString:@"Workspace"]) {
     [appKillBtn setEnabled:NO];
     [appKillBtn setTransparent:YES];

@@ -34,7 +34,7 @@
    - openFile:
    - iconForFile:
    - getInfoForFile:
-   - openIconForDirectory:
+   - iconForOpenedDirectory:
    Other areas of interest:
    - Notification center.
    - File operations.
@@ -187,20 +187,6 @@ APPKIT_EXPORT NSString *NSWorkspaceDuplicateOperation;
 //--- Requesting Information about Files
 //-----------------------------------------------------------------------------
 
-/** Returns the full path for the application appName.*/
-/* GNUstep:
-   Given an application name, return the full path for that application.
-   This method looks for the application in standard locations, and if not
-   found there, according to MacOS-X documentation, returns nil.
-   If the supplied application name is an absolute path, returns that path
-   irrespective of whether such an application exists or not.  This is
-   *not* the docmented debavior in the MacOS-X documentation, but is
-   the MacOS-X implemented behavior.
-   If the appName has an extension, it is used, otherwise in GNUstep
-   the standard app, debug, and profile extensions are tried.*/
-// CHECK
-// - (NSString*)fullPathForApplication:(NSString*)appName;
-
 // TODO (use libmagic)
 /** Describes the file system at fullPath in description and fileSystemType,
     sets the Flags appropriately, and returns YES if fullPath is a file system
@@ -243,7 +229,7 @@ APPKIT_EXPORT NSString *NSShellCommandFileType;
     the application the Workspace Manager would use to open fullPath, sets
     type to a value or file name extension indicating the file's type, and
     returns YES upon success and NO otherwise.*/
-// TODO (use libmagic)
+// use libmagic
 - (BOOL)getInfoForFile:(NSString *)fullPath application:(NSString **)appName type:(NSString **)type;
 
 /** Returns an NSImage with the icon for the single file specified by
@@ -261,7 +247,7 @@ APPKIT_EXPORT NSString *NSShellCommandFileType;
 
 // ADDON
 /** Returns an icon of directory in opened state.*/
-- (NSImage *)openIconForDirectory:(NSString *)fullPath;
+- (NSImage *)iconForOpenedDirectory:(NSString *)fullPath;
 
 //-----------------------------------------------------------------------------
 //--- Tracking Changes to the File System
@@ -380,7 +366,6 @@ APPKIT_EXPORT NSString *NSShellCommandFileType;
 - (NSArray *)mountNewRemovableMedia;
 
 /** Returns a list of the pathnames of all currently mounted removable disks.*/
-// TODO
 - (NSArray *)mountedRemovableMedia;
 
 //-----------------------------------------------------------------------------
@@ -445,4 +430,4 @@ APPKIT_EXPORT NSString *NSWorkspaceDidMountNotification;                 // @"NS
 APPKIT_EXPORT NSString *NSWorkspaceDidPerformFileOperationNotification;  // @"NSOperationNumber"
 APPKIT_EXPORT NSString *NSWorkspaceDidUnmountNotification;               // @"NSDevicePath"
 APPKIT_EXPORT NSString *NSWorkspaceWillPowerOffNotification;
-APPKIT_EXPORT NSString *NSWorkspaceWillUnmountNotification;  // @"NSDevicePath"
+APPKIT_EXPORT NSString *NSWorkspaceWillUnmountNotification;              // @"NSDevicePath"

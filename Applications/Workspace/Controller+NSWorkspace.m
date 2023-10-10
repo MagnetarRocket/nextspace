@@ -36,11 +36,6 @@
 #include <unistd.h>
 
 #import <AppKit/AppKit.h>
-#include "log_utils.h"
-#include "Foundation/NSTimer.h"
-#include "Foundation/NSRunLoop.h"
-#include "AppKit/NSApplication.h"
-#include "Foundation/NSObjCRuntime.h"
 #import <Foundation/Foundation.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 
@@ -49,9 +44,10 @@
 #import <DesktopKit/NXTFileManager.h>
 
 #import "Viewers/FileViewer.h"
-#import "Controller+NSWorkspace.h"
 #import "WMNotificationCenter.h"
+#import "Processes/ProcessManager.h"
 #import "Workspace+WM.h"
+#import "Controller+NSWorkspace.h"
 
 #define PosixExecutePermission (0111)
 
@@ -74,11 +70,19 @@ static NSString *_rootPath = @"/";
 
 // Icon handling
 - (NSImage *)_extIconForApp:(NSString *)appName info:(NSDictionary *)extInfo;
-- (NSImage *)unknownFiletypeImage;
+- (NSImage *)_unknownFiletypeImage;
 - (NSImage *)_imageFromFile:(NSString *)iconPath;
 - (NSImage *)_iconForExtension:(NSString *)ext;
 - (NSImage *)_iconForFileContents:(NSString *)fullPath;
 - (BOOL)_extension:(NSString *)ext role:(NSString *)role app:(NSString **)app;
+
+- (NSString *)_getBestIconForExtension:(NSString *)ext;
+- (NSDictionary *)_infoForExtension:(NSString *)ext;
+- (NSBundle *)_bundleForApp:(NSString *)appName;
+- (NSImage *)_appIconForApp:(NSString *)appName;
+- (NSString *)_locateApplicationBinary:(NSString *)appName;
+- (void)_setBestApp:(NSString *)appName inRole:(NSString *)role forExtension:(NSString *)ext;
+- (void)_setBestIcon:(NSString *)iconPath forExtension:(NSString *)ext;
 
 // Preferences
 // - (void)_workspacePreferencesChanged:(NSNotification *)aNotification;
@@ -86,18 +90,6 @@ static NSString *_rootPath = @"/";
 // application communication
 - (BOOL)_launchApplication:(NSString *)appName arguments:(NSArray *)args;
 - (id)_connectApplication:(NSString *)appName;
-
-@end
-
-@interface Controller (NSWorkspaceGNUstep)
-
-- (NSString *)getBestIconForExtension:(NSString *)ext;
-- (NSDictionary *)infoForExtension:(NSString *)ext;
-- (NSBundle *)bundleForApp:(NSString *)appName;
-- (NSImage *)appIconForApp:(NSString *)appName;
-- (NSString *)locateApplicationBinary:(NSString *)appName;
-- (void)setBestApp:(NSString *)appName inRole:(NSString *)role forExtension:(NSString *)ext;
-- (void)setBestIcon:(NSString *)iconPath forExtension:(NSString *)ext;
 
 @end
 
@@ -356,7 +348,7 @@ static NSLock *raceLock = nil;
                        fullPath, nil, nil, nil);
       return NO;
     }
-    launchPath = [self locateApplicationBinary:fullPath];
+    launchPath = [self _locateApplicationBinary:fullPath];
     if (launchPath == nil) {
       NXTRunAlertPanel(_(@"Workspace"),
                        _(@"Failed to start application '%@'.\n"
@@ -391,12 +383,12 @@ static NSLock *raceLock = nil;
     NSString *iconPath;
     NSString *launchPath;
 
-    appBundle = [self bundleForApp:appName];
+    appBundle = [self _bundleForApp:appName];
     if (appBundle) {
       appInfo = [appBundle infoDictionary];
       iconPath = [appBundle pathForImageResource:[appInfo objectForKey:@"NSIcon"]];
       wmName = [appInfo objectForKey:@"NSExecutable"];
-      launchPath = [self locateApplicationBinary:appName];
+      launchPath = [self _locateApplicationBinary:appName];
       if (launchPath == nil) {
         return NO;
       }
@@ -472,54 +464,6 @@ static NSLock *raceLock = nil;
   }
 
   return NO;
-}
-
-- (NSString *)fullPathForApplication:(NSString *)appName
-{
-  NSString *base;
-  NSString *path;
-  NSString *ext;
-
-  if ([appName length] == 0) {
-    return nil;
-  }
-  if ([[appName lastPathComponent] isEqual:appName] == NO) {
-    if ([appName isAbsolutePath] == YES) {
-      return appName;  // MacOS-X implementation behavior.
-    }
-    /*
-     * Relative path ... get standarized absolute path
-     */
-    path = [[NSFileManager defaultManager] currentDirectoryPath];
-    appName = [path stringByAppendingPathComponent:appName];
-    appName = [appName stringByStandardizingPath];
-  }
-  base = [appName stringByDeletingLastPathComponent];
-  appName = [appName lastPathComponent];
-  ext = [appName pathExtension];
-  if ([ext length] == 0) {  // no extension, let's find one
-    path = [appName stringByAppendingPathExtension:@"app"];
-    path = [_applications objectForKey:path];
-    if (path == nil) {
-      path = [appName stringByAppendingPathExtension:@"debug"];
-      path = [_applications objectForKey:path];
-    }
-    if (path == nil) {
-      path = [appName stringByAppendingPathExtension:@"profile"];
-      path = [_applications objectForKey:path];
-    }
-  } else {
-    path = [_applications objectForKey:appName];
-  }
-
-  /*
-   * If the original name included a path, check that the located name
-   * matches it.  If it doesn't we return nil as MacOS-X does.
-   */
-  if ([base length] > 0 && [base isEqual:[path stringByDeletingLastPathComponent]] == NO) {
-    path = nil;
-  }
-  return path;
 }
 
 // FIXME: TODO
@@ -640,7 +584,7 @@ static NSLock *raceLock = nil;
     // Application
     if ([pathExtension isEqualToString:@"app"] || [pathExtension isEqualToString:@"debug"] ||
         [pathExtension isEqualToString:@"profile"]) {
-      image = [self appIconForApp:fullPath];
+      image = [self _appIconForApp:fullPath];
 
       if (image == nil) {
         image = [NSImage _standardImageWithName:@"NXApplication"];
@@ -674,7 +618,7 @@ static NSLock *raceLock = nil;
     // folder doesn't contain dir icon
     if (image == nil) {
       image = [self _iconForExtension:pathExtension];
-      if (image == nil || image == [self unknownFiletypeImage]) {
+      if (image == nil || image == [self _unknownFiletypeImage]) {
         NSString *iconName;
 
         iconName = [folderPathIconDict objectForKey:fullPath];
@@ -715,7 +659,7 @@ static NSLock *raceLock = nil;
     }
 
     // By file contents
-    if (image == nil || image == [self unknownFiletypeImage]) {
+    if (image == nil || image == [self _unknownFiletypeImage]) {
       image = [self _iconForFileContents:fullPath];
     }
   } else if ([mgr isReadableFileAtPath:fullPath] == NO) {
@@ -723,7 +667,7 @@ static NSLock *raceLock = nil;
   }
 
   if (image == nil) {
-    image = [self unknownFiletypeImage];
+    image = [self _unknownFiletypeImage];
   }
 
   return image;
@@ -747,7 +691,7 @@ static NSLock *raceLock = nil;
 }
 
 // NEXTSPACE addon
-- (NSImage *)openIconForDirectory:(NSString *)fullPath
+- (NSImage *)iconForOpenedDirectory:(NSString *)fullPath
 {
   NSString *appName, *fileType;
   NSString *openDirIconPath;
@@ -855,15 +799,7 @@ static NSLock *raceLock = nil;
 
 - (NSDictionary *)activeApplication
 {
-  NSString *path = @"";
-  NSString *name = @"";
-  NSNumber *PID = [NSNumber numberWithInt:-1];
-
-  return @{
-    @"NSApplicationPath" : path,
-    @"NSApplicationName" : name,
-    @"NSApplicationProcessIdentifier" : PID
-  };
+  return [[ProcessManager shared] activeApplication];
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -983,7 +919,7 @@ static NSLock *raceLock = nil;
       NSString *iconPath;
       NSBundle *bundle;
 
-      bundle = [self bundleForApp:appName];
+      bundle = [self _bundleForApp:appName];
       iconPath = [bundle pathForImageResource:file];
       /*
        * If the icon is not in the Resources of the app, try looking
@@ -1002,7 +938,7 @@ static NSLock *raceLock = nil;
 }
 
 /** Returns the default icon to display for a file */
-- (NSImage *)unknownFiletypeImage
+- (NSImage *)_unknownFiletypeImage
 {
   static NSImage *image = nil;
 
@@ -1060,7 +996,7 @@ static NSLock *raceLock = nil;
       icon = [self _imageFromFile:iconPath];
     }
 
-    if (icon == nil && (extInfo = [self infoForExtension:ext]) != nil) {
+    if (icon == nil && (extInfo = [self _infoForExtension:ext]) != nil) {
       NSString *appName;
 
       /*
@@ -1101,7 +1037,7 @@ static NSLock *raceLock = nil;
         }
         icon = unknownApplication;
       } else {
-        icon = [self unknownFiletypeImage];
+        icon = [self _unknownFiletypeImage];
       }
     }
 
@@ -1142,7 +1078,7 @@ static NSLock *raceLock = nil;
 {
   NSEnumerator *enumerator;
   NSString *appName = nil;
-  NSDictionary *apps = [self infoForExtension:ext];
+  NSDictionary *apps = [self _infoForExtension:ext];
   NSDictionary *prefs;
   NSDictionary *info;
 
@@ -1163,7 +1099,7 @@ static NSLock *raceLock = nil;
           *app = appName;
         }
         return YES;
-      } else if ([self locateApplicationBinary:appName] != nil) {
+      } else if ([self _locateApplicationBinary:appName] != nil) {
         /*
          * Return the preferred application even though it doesn't
          * say it opens this type of file ... preferences overrule.
@@ -1184,7 +1120,7 @@ static NSLock *raceLock = nil;
           *app = appName;
         }
         return YES;
-      } else if ([self locateApplicationBinary:appName] != nil) {
+      } else if ([self _locateApplicationBinary:appName] != nil) {
         /*
          * Return the preferred application even though it doesn't
          * say it opens this type of file ... preferences overrule.
@@ -1313,7 +1249,7 @@ static NSLock *raceLock = nil;
   NSDictionary *userinfo;
   NSString *host;
 
-  path = [self locateApplicationBinary:appName];
+  path = [self _locateApplicationBinary:appName];
   if (path == nil) {
     return NO;
   }
@@ -1483,15 +1419,12 @@ static NSLock *raceLock = nil;
   return app;
 }
 
-@end
-
-@implementation Controller (NSWorkspaceGNUstep)
 
 /**
  * Returns the path set for the icon matching the image by
- * -setBestIcon:forExtension:
+ * -_setBestIcon:forExtension:
  */
-- (NSString *)getBestIconForExtension:(NSString *)ext
+- (NSString *)_getBestIconForExtension:(NSString *)ext
 {
   NSString *iconPath = nil;
 
@@ -1513,7 +1446,7 @@ static NSLock *raceLock = nil;
  * the dictionary of applications that can handle our file and
  * returns it.
  */
-- (NSDictionary *)infoForExtension:(NSString *)ext
+- (NSDictionary *)_infoForExtension:(NSString *)ext
 {
   NSDictionary *map;
 
@@ -1528,13 +1461,13 @@ static NSLock *raceLock = nil;
  * .debug, .profile) is optional, but if provided it will be used.<br />
  * Returns nil if the specified app does not exist as requested.
  */
-- (NSBundle *)bundleForApp:(NSString *)appName
+- (NSBundle *)_bundleForApp:(NSString *)appName
 {
   if ([appName length] == 0) {
     return nil;
   }
   if ([[appName lastPathComponent] isEqual:appName]) {  // it's a name
-    appName = [self fullPathForApplication:appName];
+    appName = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
   } else {
     NSFileManager *fm;
     NSString *ext;
@@ -1570,7 +1503,7 @@ static NSLock *raceLock = nil;
  * Returns the application icon for the given app.
  * Or null if none defined or appName is not a valid application name.
  */
-- (NSImage *)appIconForApp:(NSString *)appName
+- (NSImage *)_appIconForApp:(NSString *)appName
 {
   NSBundle *bundle;
   NSImage *image = nil;
@@ -1578,8 +1511,8 @@ static NSLock *raceLock = nil;
   NSString *iconPath = nil;
   NSString *fullPath;
 
-  fullPath = [self fullPathForApplication:appName];
-  bundle = [self bundleForApp:fullPath];
+  fullPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
+  bundle = [self _bundleForApp:fullPath];
   if (bundle == nil) {
     return nil;
   }
@@ -1640,11 +1573,11 @@ static NSLock *raceLock = nil;
  * Requires the path to an application wrapper as an argument, and returns
  * the full path to the executable.
  */
-- (NSString *)locateApplicationBinary:(NSString *)appName
+- (NSString *)_locateApplicationBinary:(NSString *)appName
 {
   NSString *path;
   NSString *file;
-  NSBundle *bundle = [self bundleForApp:appName];
+  NSBundle *bundle = [self _bundleForApp:appName];
 
   if (bundle == nil) {
     return nil;
@@ -1681,7 +1614,7 @@ static NSLock *raceLock = nil;
  * Sets up a user preference  for which app should be used to open files
  * of the specified extension.
  */
-- (void)setBestApp:(NSString *)appName inRole:(NSString *)role forExtension:(NSString *)ext
+- (void)_setBestApp:(NSString *)appName inRole:(NSString *)role forExtension:(NSString *)ext
 {
   NSMutableDictionary *map;
   NSMutableDictionary *inf;
@@ -1731,7 +1664,7 @@ static NSLock *raceLock = nil;
  * Sets up a user preference for which icon should be used to
  * represent the specified file extension.
  */
-- (void)setBestIcon:(NSString *)iconPath forExtension:(NSString *)ext
+- (void)_setBestIcon:(NSString *)iconPath forExtension:(NSString *)ext
 {
   NSMutableDictionary *map;
   NSMutableDictionary *inf;

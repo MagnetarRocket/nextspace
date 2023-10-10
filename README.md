@@ -1,6 +1,6 @@
 # NEXTSPACE
 
-[![trunkmaster](https://circleci.com/gh/trunkmaster/nextspace.svg?style=svg)](https://app.circleci.com/pipelines/github/trunkmaster/nextspace/)
+[![trunkmaster](Documentation/NxtSpace-logo.png)
 
 NEXTSPACE is a desktop environment that brings a [NeXTSTEP](https://en.wikipedia.org/wiki/NeXTSTEP) look and feel to Linux. I try to keep the user experience as close as possible to the original NeXT OS. It is developed according to the ["OpenStep User Interface Guidelines"](http://www.gnustep.org/resources/documentation/OpenStepUserInterfaceGuidelines.pdf).
 

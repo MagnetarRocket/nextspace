@@ -25,3 +25,4 @@ Applications/Workspace/WM/compile
 *.dir
 *~
 *.DS_Store
+Working/*

@@ -1,7 +1,6 @@
-# NEXTSPACE
+# [![trunkmaster](Documentation/NxtSpace-logo.png)
 
-[![trunkmaster](Documentation/NxtSpace-logo.png)
-
+## About…
 NEXTSPACE is a desktop environment that brings a [NeXTSTEP](https://en.wikipedia.org/wiki/NeXTSTEP) look and feel to Linux. I try to keep the user experience as close as possible to the original NeXT OS. It is developed according to the ["OpenStep User Interface Guidelines"](http://www.gnustep.org/resources/documentation/OpenStepUserInterfaceGuidelines.pdf).
 
 > An explanation of the NeXTSTEP / NextStep naming convention is discussed in further detail [here](Documentation/OpenStep%20Confusion.md).
@@ -10,7 +9,7 @@ NEXTSPACE is a desktop environment that brings a [NeXTSTEP](https://en.wikipedia
 
 I want to create a fast, elegant, reliable, and easy to use desktop environment with maximum attention to user experience (usability) and visual maturity. I would like it to become a platform where applications will be running with a taste of NeXT's OS. Core applications such as Login, Workspace, and Preferences are the base for future application development and examples of visual style and application integration methods.
 
-NEXTSPACE is not just a set of applications tightly integrated to each other. It is a core OS with frameworks, mouse cursors, fonts, colors, animations, and everything I think will help users to be effective and happy.
+NEXTSPACE is not just a set of applications tightly integrated to each other. It is a core environment with frameworks, mouse cursors, fonts, colors, animations, and everything I think will help users to be effective and happy.
 
 ## Why?
 1. I like the look, feel, and design principles of NeXTSTEP.
@@ -19,7 +18,7 @@ NEXTSPACE is not just a set of applications tightly integrated to each other. It
 Unlike other 'real' and 'serious' projects, I have not yet defined a target audience for NEXTSPACE. I intentionally left aside modern UI design trends (fancy animations, shadows, gray blurry lines, flat controls, acid colors, transparency). I like the accurate, clear, grayish, and "boring" UI that helps, not hinder, to get my job done.
 
 ## Not planned
-* Porting to other Linux distributions and operating systems. For now, I want a fast, accurate, and stable version for RedHat-based Linux distributions. Currently these are CentOS 7, CentOS Stream and Fedora. However, NEXTSPACE was designed to be portable and thus this point may be changed in future.
+* Porting to other Linux distributions and operating systems. For now, I want a fast, accurate, and stable version for RedHat-based Linux distributions. Currently these are CentOS 7 & CentOS 8 (and compatible), CentOS Stream and Fedora. However, NEXTSPACE was designed to be portable and thus this point may be changed in future.
 * GNOME, KDE, macOS rival in terms of visual effects, modern design principles, look and feel.
 * Implementing a macOS-like desktop paradigm. There is another good place for this -- see [Étoilé](http://etoileos.com).
 
@@ -32,7 +31,9 @@ Below is a brief description of core applications. More information about applic
 ### Login
 [Status of implementation](https://github.com/trunkmaster/nextspace/projects/6)
 
-A simple login panel where you enter your user name and password. No screenshot - it's an exact copy of NeXTSTEP's `loginwindow` in terms of look and feel.
+A simple login panel where you enter your user name and password, or use the buttons bellow to send power singals to your machine. It's an evolution of NeXTSTEP's `loginwindow` in terms of look and feel.
+
+![Login](Documentation/Login.png)
 
 ### Workspace
 [Status of implementation](https://github.com/trunkmaster/nextspace/projects/4)
@@ -78,6 +79,10 @@ A terminal with Linux console emulation. I've started with the version created b
 
 ## For developers
 For those who are eager to know "How it's done?" can find information on development tasks, goals, solutions, implementation details, and build instructions on the [Wiki](https://github.com/trunkmaster/nextspace/wiki).
+
+## Dependiances
+
+* Gnustep
 
 ## To be done:
 * Merge other forks when they don't conflict into this one to keep it updated.

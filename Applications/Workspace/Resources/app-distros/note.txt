@@ -1,0 +1,27 @@
+To be used with photographs that aproxmate the OS decpited
+
+*AlmaLinux = ?
+
+* CentOS = A penny
+
+* debian = a red middle eastern oil lamp
+
+* dietPi = A book in the colors of razer labeled "diet guide"
+
+* Fedora = the hat called an fedora
+
+* OpenIndiana = Bird of pardice
+
+* Raspbian = Raspberry
+
+* RedSleeve = A red sleeve
+
+* RedHat = A all red lacrose hat
+
+* Rocky = a rock
+
+* Solaris = an artistic decpiction of the sun
+
+* Triblix = A brown fuzzy ball (Don't tell paramount about this!)
+
+* Ubuntu = An orange mask

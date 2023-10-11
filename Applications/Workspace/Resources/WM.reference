@@ -146,7 +146,7 @@
   ShowClipTitle = YES;
   SmoothWorkspaceBack = NO;
   SwitchPanelImages = (swtile.png, swback.png, 30, 40);
-  TitleJustify = center;
+  TitleJustify = left;
   UTitleBack = (solid, "#aaaaaa");
   UTitleColor = black;
   WidgetColor = (solid, "#aaaaaa");

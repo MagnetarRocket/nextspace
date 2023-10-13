@@ -82,7 +82,9 @@ For those who are eager to know "How it's done?" can find information on develop
 
 ## Dependiances
 
-* Gnustep
+* Gnustep.
+
+ * Nextspace assumes that you or the distro had allready installed systemd & plymouth.
 
 ## To be done:
 * Merge other forks when they don't conflict into this one to keep it updated.

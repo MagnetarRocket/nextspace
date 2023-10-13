@@ -140,7 +140,7 @@
   MenuTitleMaxHeight = 22;
   MenuTitleMinHeight = 22;
   ModifierKeyLabels = ("Shift+", "Control+", "Mod1+",  "Mod2+", "Mod3+", "Mod4+",  "Mod5+");
-  PTitleBack = (dgradient, "rgb:1/44/100", "rgb:58/58/199");
+  PTitleBack = (dgradient, "rgb:37/37/100", "rgb:0/23/92");
   PTitleColor = white;
   ResizebarBack = (solid, "#aaaaaa");
   ShowClipTitle = YES;

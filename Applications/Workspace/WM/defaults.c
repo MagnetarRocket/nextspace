@@ -175,6 +175,8 @@ static WDECallbackUpdate setModifierKeyLabels;
 static WDECallbackConvert getCursor;
 static WDECallbackUpdate setCursor;
 
+static WDECallbackUpdate setAntialiasedText;
+
 /*
  * Tables to convert strings to enumeration values.
  * Values stored are char
@@ -348,212 +350,323 @@ WDefaultEntry staticOptionList[] = {
 
 /* dynamic options */
 WDefaultEntry optionList[] = {
-  {"IconPosition", "blh", seIconPositions, &wPreferences.icon_yard, getEnum, setIconPosition, NULL, NULL},
-  {"IconificationStyle", "Zoom", seIconificationStyles, &wPreferences.iconification_style, getEnum, NULL, NULL, NULL},
-  {"ImagePaths", DEF_IMAGE_PATHS, NULL, &wPreferences.image_paths, getPathList, NULL, NULL, NULL},
-  {"ColormapMode", "Auto", seColormapModes, &wPreferences.colormap_mode, getEnum, NULL, NULL, NULL},
-  {"AutoFocus", "YES", NULL, &wPreferences.auto_focus, getBool, NULL, NULL, NULL},
-  {"RaiseDelay", "0", NULL, &wPreferences.raise_delay, getInt, NULL, NULL, NULL},
-  {"CirculateRaise", "YES", NULL, &wPreferences.circ_raise, getBool, NULL, NULL, NULL},
-  {"Superfluous", "NO", NULL, &wPreferences.superfluous, getBool, NULL, NULL, NULL},
-  {"StickyIcons", "YES", NULL, &wPreferences.sticky_icons, getBool, setStickyIcons, NULL, NULL},
-  {"SaveSessionOnExit", "NO", NULL, &wPreferences.save_session_on_exit, getBool, NULL, NULL, NULL},
-  {"ScrollableMenus", "YES", NULL, &wPreferences.scrollable_menus, getBool, NULL, NULL, NULL},
-  {"MenuScrollSpeed", "medium", seSpeeds, &wPreferences.menu_scroll_speed, getEnum, NULL, NULL, NULL},
-  {"IconSlideSpeed", "Slow", seSpeeds, &wPreferences.icon_slide_speed, getEnum, NULL, NULL, NULL},
-  {"ClipAutoraiseDelay", "600", NULL, &wPreferences.clip_auto_raise_delay, getInt, NULL, NULL, NULL},
-  {"ClipAutolowerDelay", "1000", NULL, &wPreferences.clip_auto_lower_delay, getInt, NULL, NULL, NULL},
-  {"ClipAutoexpandDelay", "600", NULL, &wPreferences.clip_auto_expand_delay, getInt, NULL, NULL, NULL},
-  {"ClipAutocollapseDelay", "1000", NULL, &wPreferences.clip_auto_collapse_delay, getInt, NULL, NULL, NULL},
-  {"WrapAppiconsInDock", "NO", NULL, NULL, getBool, setWrapAppiconsInDock, NULL, NULL},
-  {"AlignSubmenus", "YES", NULL, &wPreferences.align_menus, getBool, NULL, NULL, NULL},
-  {"ViKeyMenus", "NO", NULL, &wPreferences.vi_key_menus, getBool, NULL, NULL, NULL},
-  {"OpenTransientOnOwnerWorkspace", "YES", NULL, &wPreferences.open_transients_with_parent, getBool, NULL, NULL, NULL},
-  {"WindowPlacement", "cascade", sePlacements, &wPreferences.window_placement, getEnum, NULL, NULL, NULL},
-  {"IgnoreFocusClick", "NO", NULL, &wPreferences.ignore_focus_click, getBool, NULL, NULL, NULL},
-  {"UseSaveUnders", "NO", NULL, &wPreferences.use_saveunders, getBool, NULL, NULL, NULL},
-  {"OpaqueMove", "YES", NULL, &wPreferences.opaque_move, getBool, NULL, NULL, NULL},
-  {"OpaqueResize", "NO", NULL, &wPreferences.opaque_resize, getBool, NULL, NULL, NULL},
-  {"OpaqueMoveResizeKeyboard", "NO", NULL, &wPreferences.opaque_move_resize_keyboard, getBool, NULL, NULL, NULL},
-  {"DisableAnimations", "NO", NULL, &wPreferences.no_animations, getBool, NULL, NULL, NULL},
-  {"DontLinkWorkspaces", "NO", NULL, &wPreferences.no_autowrap, getBool, NULL, NULL, NULL},
-  {"WindowSnapping", "NO", NULL, &wPreferences.window_snapping, getBool, NULL, NULL, NULL},
-  {"SnapEdgeDetect", "1", NULL, &wPreferences.snap_edge_detect, getInt, NULL, NULL, NULL},
-  {"SnapCornerDetect", "10", NULL, &wPreferences.snap_corner_detect, getInt, NULL, NULL, NULL},
-  {"DragMaximizedWindow", "Move", seDragMaximizedWindow, &wPreferences.drag_maximized_window, getEnum, NULL, NULL, NULL},
-  {"AutoArrangeIcons", "NO", NULL, &wPreferences.auto_arrange_icons, getBool, NULL, NULL, NULL},
-  {"NoWindowOverDock", "YES", NULL, &wPreferences.no_window_over_dock, getBool, updateUsableArea, NULL, NULL},
-  {"NoWindowOverIcons", "YES", NULL, &wPreferences.no_window_over_icons, getBool, updateUsableArea, NULL, NULL},
-  {"WindowPlaceOrigin", "(100, 100)", NULL, &wPreferences.window_place_origin, getCoord, NULL, NULL, NULL},
-  {"ResizeDisplay", "Titlebar", seGeomDisplays, &wPreferences.size_display, getEnum, NULL, NULL, NULL},
-  {"MoveDisplay", "Titlebar", seGeomDisplays, &wPreferences.move_display, getEnum, NULL, NULL, NULL},
-  {"DontConfirmKill", "NO", NULL, &wPreferences.dont_confirm_kill, getBool, NULL, NULL, NULL},
-  {"WindowTitleBalloons", "NO", NULL, &wPreferences.window_balloon, getBool, NULL, NULL, NULL},
-  {"MiniwindowTitleBalloons", "YES", NULL, &wPreferences.miniwin_title_balloon, getBool, NULL, NULL, NULL},
-  {"MiniwindowPreviewBalloons", "NO", NULL, &wPreferences.miniwin_preview_balloon, getBool, NULL, NULL, NULL},
-  {"AppIconBalloons", "NO", NULL, &wPreferences.appicon_balloon, getBool, NULL, NULL, NULL},
-  {"HelpBalloons", "NO", NULL, &wPreferences.help_balloon, getBool, NULL, NULL, NULL},
-  {"EdgeResistance", "30", NULL, &wPreferences.edge_resistance, getInt, NULL, NULL, NULL},
-  {"ResizeIncrement", "0", NULL, &wPreferences.resize_increment, getInt, NULL, NULL, NULL},
-  {"Attraction", "NO", NULL, &wPreferences.attract, getBool, NULL, NULL, NULL},
-  {"DisableBlinking", "NO", NULL, &wPreferences.dont_blink, getBool, NULL, NULL, NULL},
-  {"SingleClickLaunch", "NO", NULL, &wPreferences.single_click, getBool, NULL, NULL, NULL},
-  {"StrictWindozeCycle", "YES", NULL, &wPreferences.strict_windoze_cycle, getBool, NULL, NULL,
-   NULL},
-  {"SwitchPanelOnlyOpen", "NO", NULL, &wPreferences.panel_only_open, getBool, NULL, NULL, NULL},
-  {"MiniPreviewSize", "128", NULL, &wPreferences.minipreview_size, getInt, NULL, NULL, NULL},
-  {"IgnoreGtkHints", "NO", NULL, &wPreferences.ignore_gtk_decoration_hints, getBool, NULL, NULL,
-   NULL},
+    {"IconPosition", "blh", seIconPositions, &wPreferences.icon_yard, getEnum, setIconPosition,
+     NULL, NULL},
+    {"IconificationStyle", "Zoom", seIconificationStyles, &wPreferences.iconification_style,
+     getEnum, NULL, NULL, NULL},
+    {"ImagePaths", DEF_IMAGE_PATHS, NULL, &wPreferences.image_paths, getPathList, NULL, NULL, NULL},
+    {"ColormapMode", "Auto", seColormapModes, &wPreferences.colormap_mode, getEnum, NULL, NULL,
+     NULL},
+    {"AutoFocus", "YES", NULL, &wPreferences.auto_focus, getBool, NULL, NULL, NULL},
+    {"RaiseDelay", "0", NULL, &wPreferences.raise_delay, getInt, NULL, NULL, NULL},
+    {"CirculateRaise", "YES", NULL, &wPreferences.circ_raise, getBool, NULL, NULL, NULL},
+    {"Superfluous", "YES", NULL, &wPreferences.superfluous, getBool, NULL, NULL, NULL},
+    {"StickyIcons", "YES", NULL, &wPreferences.sticky_icons, getBool, setStickyIcons, NULL, NULL},
+    {"SaveSessionOnExit", "NO", NULL, &wPreferences.save_session_on_exit, getBool, NULL, NULL,
+     NULL},
+    {"ScrollableMenus", "YES", NULL, &wPreferences.scrollable_menus, getBool, NULL, NULL, NULL},
+    {"MenuScrollSpeed", "medium", seSpeeds, &wPreferences.menu_scroll_speed, getEnum, NULL, NULL,
+     NULL},
+    {"IconSlideSpeed", "Slow", seSpeeds, &wPreferences.icon_slide_speed, getEnum, NULL, NULL, NULL},
+    {"ClipAutoraiseDelay", "600", NULL, &wPreferences.clip_auto_raise_delay, getInt, NULL, NULL,
+     NULL},
+    {"ClipAutolowerDelay", "1000", NULL, &wPreferences.clip_auto_lower_delay, getInt, NULL, NULL,
+     NULL},
+    {"ClipAutoexpandDelay", "600", NULL, &wPreferences.clip_auto_expand_delay, getInt, NULL, NULL,
+     NULL},
+    {"ClipAutocollapseDelay", "1000", NULL, &wPreferences.clip_auto_collapse_delay, getInt, NULL,
+     NULL, NULL},
+    {"WrapAppiconsInDock", "NO", NULL, NULL, getBool, setWrapAppiconsInDock, NULL, NULL},
+    {"AlignSubmenus", "YES", NULL, &wPreferences.align_menus, getBool, NULL, NULL, NULL},
+    {"ViKeyMenus", "NO", NULL, &wPreferences.vi_key_menus, getBool, NULL, NULL, NULL},
+    {"OpenTransientOnOwnerWorkspace", "YES", NULL, &wPreferences.open_transients_with_parent,
+     getBool, NULL, NULL, NULL},
+    {"WindowPlacement", "cascade", sePlacements, &wPreferences.window_placement, getEnum, NULL,
+     NULL, NULL},
+    {"IgnoreFocusClick", "NO", NULL, &wPreferences.ignore_focus_click, getBool, NULL, NULL, NULL},
+    {"UseSaveUnders", "NO", NULL, &wPreferences.use_saveunders, getBool, NULL, NULL, NULL},
+    {"OpaqueMove", "YES", NULL, &wPreferences.opaque_move, getBool, NULL, NULL, NULL},
+    {"OpaqueResize", "NO", NULL, &wPreferences.opaque_resize, getBool, NULL, NULL, NULL},
+    {"OpaqueMoveResizeKeyboard", "NO", NULL, &wPreferences.opaque_move_resize_keyboard, getBool,
+     NULL, NULL, NULL},
+    {"DisableAnimations", "NO", NULL, &wPreferences.no_animations, getBool, NULL, NULL, NULL},
+    {"DontLinkWorkspaces", "NO", NULL, &wPreferences.no_autowrap, getBool, NULL, NULL, NULL},
+    {"WindowSnapping", "NO", NULL, &wPreferences.window_snapping, getBool, NULL, NULL, NULL},
+    {"SnapEdgeDetect", "1", NULL, &wPreferences.snap_edge_detect, getInt, NULL, NULL, NULL},
+    {"SnapCornerDetect", "10", NULL, &wPreferences.snap_corner_detect, getInt, NULL, NULL, NULL},
+    {"DragMaximizedWindow", "Move", seDragMaximizedWindow, &wPreferences.drag_maximized_window,
+     getEnum, NULL, NULL, NULL},
+    {"AutoArrangeIcons", "NO", NULL, &wPreferences.auto_arrange_icons, getBool, NULL, NULL, NULL},
+    {"NoWindowOverDock", "YES", NULL, &wPreferences.no_window_over_dock, getBool, updateUsableArea,
+     NULL, NULL},
+    {"NoWindowOverIcons", "YES", NULL, &wPreferences.no_window_over_icons, getBool,
+     updateUsableArea, NULL, NULL},
+    {"WindowPlaceOrigin", "(100, 100)", NULL, &wPreferences.window_place_origin, getCoord, NULL,
+     NULL, NULL},
+    {"ResizeDisplay", "Titlebar", seGeomDisplays, &wPreferences.size_display, getEnum, NULL, NULL,
+     NULL},
+    {"MoveDisplay", "Titlebar", seGeomDisplays, &wPreferences.move_display, getEnum, NULL, NULL,
+     NULL},
+    {"DontConfirmKill", "NO", NULL, &wPreferences.dont_confirm_kill, getBool, NULL, NULL, NULL},
+    {"WindowTitleBalloons", "NO", NULL, &wPreferences.window_balloon, getBool, NULL, NULL, NULL},
+    {"MiniwindowTitleBalloons", "YES", NULL, &wPreferences.miniwin_title_balloon, getBool, NULL,
+     NULL, NULL},
+    {"MiniwindowPreviewBalloons", "NO", NULL, &wPreferences.miniwin_preview_balloon, getBool, NULL,
+     NULL, NULL},
+    {"AppIconBalloons", "NO", NULL, &wPreferences.appicon_balloon, getBool, NULL, NULL, NULL},
+    {"HelpBalloons", "NO", NULL, &wPreferences.help_balloon, getBool, NULL, NULL, NULL},
+    {"EdgeResistance", "30", NULL, &wPreferences.edge_resistance, getInt, NULL, NULL, NULL},
+    {"ResizeIncrement", "0", NULL, &wPreferences.resize_increment, getInt, NULL, NULL, NULL},
+    {"Attraction", "NO", NULL, &wPreferences.attract, getBool, NULL, NULL, NULL},
+    {"DisableBlinking", "NO", NULL, &wPreferences.dont_blink, getBool, NULL, NULL, NULL},
+    {"SingleClickLaunch", "NO", NULL, &wPreferences.single_click, getBool, NULL, NULL, NULL},
+    {"StrictWindozeCycle", "YES", NULL, &wPreferences.strict_windoze_cycle, getBool, NULL, NULL,
+     NULL},
+    {"SwitchPanelOnlyOpen", "NO", NULL, &wPreferences.panel_only_open, getBool, NULL, NULL, NULL},
+    {"MiniPreviewSize", "128", NULL, &wPreferences.minipreview_size, getInt, NULL, NULL, NULL},
+    {"IgnoreGtkHints", "NO", NULL, &wPreferences.ignore_gtk_decoration_hints, getBool, NULL, NULL,
+     NULL},
 
-  /* --- Mouse options --- */
+    /* --- Mouse options --- */
 
-  {"DoubleClickTime", "350", (void *)&wPreferences.dblclick_time, &wPreferences.dblclick_time, getInt, setDoubleClick, NULL, NULL},
-  {"DisableWSMouseActions", "NO", NULL, &wPreferences.disable_root_mouse, getBool, NULL, NULL, NULL},
-  {"MouseLeftButtonAction", "SelectWindows", seMouseButtonActions, &wPreferences.mouse_button1, getEnum, NULL, NULL, NULL},
-  {"MouseMiddleButtonAction", "OpenWindowListMenu", seMouseButtonActions, &wPreferences.mouse_button2, getEnum, NULL, NULL, NULL},
-  {"MouseRightButtonAction", "OpenApplicationsMenu", seMouseButtonActions, &wPreferences.mouse_button3, getEnum, NULL, NULL, NULL},
-  {"MouseBackwardButtonAction", "None", seMouseButtonActions, &wPreferences.mouse_button8, getEnum, NULL, NULL, NULL},
-  {"MouseForwardButtonAction", "None", seMouseButtonActions, &wPreferences.mouse_button9, getEnum, NULL, NULL, NULL},
-  {"MouseWheelAction", "None", seMouseWheelActions, &wPreferences.mouse_wheel_scroll, getEnum, NULL, NULL, NULL},
-  {"MouseWheelTiltAction", "None", seMouseWheelActions, &wPreferences.mouse_wheel_tilt, getEnum, NULL, NULL, NULL},
+    {"DoubleClickTime", "350", (void *)&wPreferences.dblclick_time, &wPreferences.dblclick_time,
+     getInt, setDoubleClick, NULL, NULL},
+    {"DisableWSMouseActions", "NO", NULL, &wPreferences.disable_root_mouse, getBool, NULL, NULL,
+     NULL},
+    {"MouseLeftButtonAction", "SelectWindows", seMouseButtonActions, &wPreferences.mouse_button1,
+     getEnum, NULL, NULL, NULL},
+    {"MouseMiddleButtonAction", "OpenWindowListMenu", seMouseButtonActions,
+     &wPreferences.mouse_button2, getEnum, NULL, NULL, NULL},
+    {"MouseRightButtonAction", "OpenApplicationsMenu", seMouseButtonActions,
+     &wPreferences.mouse_button3, getEnum, NULL, NULL, NULL},
+    {"MouseBackwardButtonAction", "None", seMouseButtonActions, &wPreferences.mouse_button8,
+     getEnum, NULL, NULL, NULL},
+    {"MouseForwardButtonAction", "None", seMouseButtonActions, &wPreferences.mouse_button9, getEnum,
+     NULL, NULL, NULL},
+    {"MouseWheelAction", "None", seMouseWheelActions, &wPreferences.mouse_wheel_scroll, getEnum,
+     NULL, NULL, NULL},
+    {"MouseWheelTiltAction", "None", seMouseWheelActions, &wPreferences.mouse_wheel_tilt, getEnum,
+     NULL, NULL, NULL},
 
-  /* --- Workspaces --- */
+    /* --- Workspaces --- */
 
-  {"AdvanceToNewWorkspace", "NO", NULL, &wPreferences.ws_advance, getBool, NULL, NULL, NULL},
-  {"CycleWorkspaces", "NO", NULL, &wPreferences.ws_cycle, getBool, NULL, NULL, NULL},
-  {"WorkspaceNameDisplayPosition", "center", seDisplayPositions, &wPreferences.workspace_name_display_position, getEnum, NULL, NULL, NULL},
-  {"WorkspaceBorder", "AllDirections", seWorkspaceBorder, &wPreferences.workspace_border_position, getEnum, updateUsableArea, NULL, NULL},
-  {"WorkspaceBorderSize", "0", NULL, &wPreferences.workspace_border_size, getInt, updateUsableArea, NULL, NULL},
+    {"AdvanceToNewWorkspace", "NO", NULL, &wPreferences.ws_advance, getBool, NULL, NULL, NULL},
+    {"CycleWorkspaces", "NO", NULL, &wPreferences.ws_cycle, getBool, NULL, NULL, NULL},
+    {"WorkspaceNameDisplayPosition", "center", seDisplayPositions,
+     &wPreferences.workspace_name_display_position, getEnum, NULL, NULL, NULL},
+    {"WorkspaceBorder", "AllDirections", seWorkspaceBorder, &wPreferences.workspace_border_position,
+     getEnum, updateUsableArea, NULL, NULL},
+    {"WorkspaceBorderSize", "0", NULL, &wPreferences.workspace_border_size, getInt,
+     updateUsableArea, NULL, NULL},
 
-  /* --- Animations --- */
+    /* --- Animations --- */
 
-  {"ShadeSpeed", "medium", seSpeeds, &wPreferences.shade_speed, getEnum, NULL, NULL, NULL},
-  {"BounceAppIconsWhenUrgent", "YES", NULL, &wPreferences.bounce_appicons_when_urgent, getBool, NULL, NULL, NULL},
-  {"RaiseAppIconsWhenBouncing", "NO", NULL, &wPreferences.raise_appicons_when_bouncing, getBool, NULL, NULL, NULL},
-  {"DoNotMakeAppIconsBounce", "YES", NULL, &wPreferences.do_not_make_appicons_bounce, getBool, NULL, NULL, NULL},
+    {"ShadeSpeed", "medium", seSpeeds, &wPreferences.shade_speed, getEnum, NULL, NULL, NULL},
+    {"BounceAppIconsWhenUrgent", "YES", NULL, &wPreferences.bounce_appicons_when_urgent, getBool,
+     NULL, NULL, NULL},
+    {"RaiseAppIconsWhenBouncing", "NO", NULL, &wPreferences.raise_appicons_when_bouncing, getBool,
+     NULL, NULL, NULL},
+    {"DoNotMakeAppIconsBounce", "YES", NULL, &wPreferences.do_not_make_appicons_bounce, getBool,
+     NULL, NULL, NULL},
 
-  /* --- Options need to get rid of or fix --- */
+    /* --- Options need to get rid of or fix --- */
 
-  /* --- Style options --- */
+    /* --- Style options --- */
 
-  {"MenuStyle", "normal", seMenuStyles, &wPreferences.menu_style, getEnum, setMenuStyle, NULL, NULL},
-  {"WidgetColor", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setWidgetColor, NULL, NULL},
-  {"IconBack", "(\"tpixmap\", \"/Library/Images/common_Tile.tiff\", \"#000000\")", NULL, NULL, getTexture, setIconTile, NULL, NULL},
-  {"MiniwindowBack", "(\"tpixmap\", \"/Library/Images/common_MiniWindowTile.tiff\", \"#000000\")", NULL, NULL, getTexture, setMiniwindowTile, NULL, NULL}, /* NEXTSPACE */
-  {"TitleJustify", "center", seJustifications, &wPreferences.title_justification, getEnum, setJustify, NULL, NULL},
-  {"WindowTitleFont", DEF_TITLE_FONT, NULL, NULL, getFont, setWinTitleFont, NULL, NULL}, {"WindowTitleExtendSpace", DEF_WINDOW_TITLE_EXTEND_SPACE, NULL, &wPreferences.window_title_clearance, getInt, setClearance, NULL, NULL},
-  {"WindowTitleMinHeight", "22", NULL, &wPreferences.window_title_min_height, getInt, setClearance, NULL, NULL},
-  {"WindowTitleMaxHeight", "22", NULL, &wPreferences.window_title_max_height, getInt, setClearance, NULL, NULL},
-  {"MenuTitleExtendSpace", DEF_MENU_TITLE_EXTEND_SPACE, NULL, &wPreferences.menu_title_clearance, getInt, setClearance, NULL, NULL},
-  {"MenuTitleMinHeight", "22", NULL, &wPreferences.menu_title_min_height, getInt, setClearance, NULL, NULL},
-  {"MenuTitleMaxHeight", "22", NULL, &wPreferences.menu_title_max_height, getInt, setClearance, NULL, NULL},
-  {"MenuTextExtendSpace", DEF_MENU_TEXT_EXTEND_SPACE, NULL, &wPreferences.menu_text_clearance, getInt, setClearance, NULL, NULL},
-  {"MenuTitleFont", DEF_MENU_TITLE_FONT, NULL, NULL, getFont, setMenuTitleFont, NULL, NULL},
-  {"MenuTextFont", DEF_MENU_ENTRY_FONT, NULL, NULL, getFont, setMenuTextFont, NULL, NULL},
-  {"IconTitleFont", DEF_ICON_TITLE_FONT, NULL, NULL, getFont, setIconTitleFont, NULL, NULL},
-  {"ClipTitleFont", DEF_CLIP_TITLE_FONT, NULL, NULL, getFont, setClipTitleFont, NULL, NULL},
-  {"ShowClipTitle", "YES", NULL, &wPreferences.show_clip_title, getBool, NULL, NULL, NULL},
-  {"LargeDisplayFont", DEF_WORKSPACE_NAME_FONT, NULL, NULL, getFont, setLargeDisplayFont, NULL, NULL},
-  {"HighlightColor", "white", NULL, NULL, getColor, setHightlight, NULL, NULL},
-  {"HighlightTextColor", "black", NULL, NULL, getColor, setHightlightText, NULL, NULL},
-  {"ClipTitleColor", "black", (void *)CLIP_NORMAL, NULL, getColor, setClipTitleColor, NULL, NULL},
-  {"CClipTitleColor", "\"#454045\"", (void *)CLIP_COLLAPSED, NULL, getColor, setClipTitleColor, NULL, NULL},
-  {"FTitleColor", "white", (void *)WS_FOCUSED, NULL, getColor, setWTitleColor, NULL, NULL},
-  {"PTitleColor", "white", (void *)WS_PFOCUSED, NULL, getColor, setWTitleColor, NULL, NULL},
-  {"UTitleColor", "black", (void *)WS_UNFOCUSED, NULL, getColor, setWTitleColor, NULL, NULL},
-  {"FTitleBack", "(solid, black)", NULL, NULL, getTexture, setFTitleBack, NULL, NULL},
-  {"PTitleBack", "(solid, \"#555555\")", NULL, NULL, getTexture, setPTitleBack, NULL, NULL},
-  {"UTitleBack", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setUTitleBack, NULL, NULL},
-  {"ResizebarBack", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setResizebarBack, NULL, NULL},
-  {"MenuTitleColor", "white", NULL, NULL, getColor, setMenuTitleColor, NULL, NULL},
-  {"MenuTextColor", "black", NULL, NULL, getColor, setMenuTextColor, NULL, NULL},
-  {"MenuDisabledColor", "\"#555555\"", NULL, NULL, getColor, setMenuDisabledColor, NULL, NULL},
-  {"MenuTitleBack", "(solid, black)", NULL, NULL, getTexture, setMenuTitleBack, NULL, NULL},
-  {"MenuTextBack", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setMenuTextBack, NULL, NULL},
-  {"IconTitleColor", "white", NULL, NULL, getColor, setIconTitleColor, NULL, NULL},
-  {"IconTitleBack", "black", NULL, NULL, getColor, setIconTitleBack, NULL, NULL},
-  {"SwitchPanelImages", "(swtile.png, swback.png, 30, 40)", &wPreferences, NULL, getPropList, setSwPOptions, NULL, NULL},
-  {"ModifierKeyLabels", "(\"Shift+\", \"Control+\", \"Alt+\", \"Mod2+\", \"Mod3+\", \"Super+\", \"Mod5+\")", &wPreferences, NULL, getPropList, setModifierKeyLabels, NULL, NULL},
-  {"FrameBorderWidth", "1", NULL, NULL, getInt, setFrameBorderWidth, NULL, NULL},
-  {"FrameBorderColor", "black", NULL, NULL, getColor, setFrameBorderColor, NULL, NULL},
-  {"FrameFocusedBorderColor", "black", NULL, NULL, getColor, setFrameFocusedBorderColor, NULL, NULL},
-  {"FrameSelectedBorderColor", "white", NULL, NULL, getColor, setFrameSelectedBorderColor, NULL, NULL},
-  {"WorkspaceMapBack", "(solid, black)", NULL, NULL, getTexture, setWorkspaceMapBackground, NULL, NULL},
+    {"MenuStyle", "normal", seMenuStyles, &wPreferences.menu_style, getEnum, setMenuStyle, NULL,
+     NULL},
+    {"WidgetColor", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setWidgetColor, NULL, NULL},
+    {"IconBack", DEF_ICON_BACK, NULL, NULL, getTexture, setIconTile, NULL, NULL},
+    /* NEXTSPACE */
+    {"MiniwindowBack", DEF_MINIWINDOW_BACK, NULL, NULL, getTexture, setMiniwindowTile, NULL, NULL},
+    {"TitleJustify", "center", seJustifications, &wPreferences.title_justification, getEnum,
+     setJustify, NULL, NULL},
+    {"WindowTitleFont", DEF_TITLE_FONT, NULL, NULL, getFont, setWinTitleFont, NULL, NULL},
+    {"WindowTitleExtendSpace", DEF_WINDOW_TITLE_EXTEND_SPACE, NULL,
+     &wPreferences.window_title_clearance, getInt, setClearance, NULL, NULL},
+    {"WindowTitleMinHeight", "22", NULL, &wPreferences.window_title_min_height, getInt,
+     setClearance, NULL, NULL},
+    {"WindowTitleMaxHeight", "22", NULL, &wPreferences.window_title_max_height, getInt,
+     setClearance, NULL, NULL},
+    {"MenuTitleExtendSpace", DEF_MENU_TITLE_EXTEND_SPACE, NULL, &wPreferences.menu_title_clearance,
+     getInt, setClearance, NULL, NULL},
+    {"MenuTitleMinHeight", "22", NULL, &wPreferences.menu_title_min_height, getInt, setClearance,
+     NULL, NULL},
+    {"MenuTitleMaxHeight", "22", NULL, &wPreferences.menu_title_max_height, getInt, setClearance,
+     NULL, NULL},
+    {"MenuTextExtendSpace", DEF_MENU_TEXT_EXTEND_SPACE, NULL, &wPreferences.menu_text_clearance,
+     getInt, setClearance, NULL, NULL},
+    {"MenuTitleFont", DEF_MENU_TITLE_FONT, NULL, NULL, getFont, setMenuTitleFont, NULL, NULL},
+    {"MenuTextFont", DEF_MENU_ENTRY_FONT, NULL, NULL, getFont, setMenuTextFont, NULL, NULL},
+    {"IconTitleFont", DEF_ICON_TITLE_FONT, NULL, NULL, getFont, setIconTitleFont, NULL, NULL},
+    {"ClipTitleFont", DEF_CLIP_TITLE_FONT, NULL, NULL, getFont, setClipTitleFont, NULL, NULL},
+    {"UseAntialiasedText", "NO", NULL, NULL, getBool, setAntialiasedText, NULL, NULL},
+    {"ShowClipTitle", "YES", NULL, &wPreferences.show_clip_title, getBool, NULL, NULL, NULL},
+    {"LargeDisplayFont", DEF_WORKSPACE_NAME_FONT, NULL, NULL, getFont, setLargeDisplayFont, NULL,
+     NULL},
+    {"HighlightColor", "white", NULL, NULL, getColor, setHightlight, NULL, NULL},
+    {"HighlightTextColor", "black", NULL, NULL, getColor, setHightlightText, NULL, NULL},
+    {"ClipTitleColor", "black", (void *)CLIP_NORMAL, NULL, getColor, setClipTitleColor, NULL, NULL},
+    {"CClipTitleColor", "\"#454045\"", (void *)CLIP_COLLAPSED, NULL, getColor, setClipTitleColor,
+     NULL, NULL},
+    {"FTitleColor", "white", (void *)WS_FOCUSED, NULL, getColor, setWTitleColor, NULL, NULL},
+    {"PTitleColor", "white", (void *)WS_PFOCUSED, NULL, getColor, setWTitleColor, NULL, NULL},
+    {"UTitleColor", "black", (void *)WS_UNFOCUSED, NULL, getColor, setWTitleColor, NULL, NULL},
+    {"FTitleBack", "(solid, black)", NULL, NULL, getTexture, setFTitleBack, NULL, NULL},
+    {"PTitleBack", "(solid, \"#555555\")", NULL, NULL, getTexture, setPTitleBack, NULL, NULL},
+    {"UTitleBack", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setUTitleBack, NULL, NULL},
+    {"ResizebarBack", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setResizebarBack, NULL, NULL},
+    {"MenuTitleColor", "white", NULL, NULL, getColor, setMenuTitleColor, NULL, NULL},
+    {"MenuTextColor", "black", NULL, NULL, getColor, setMenuTextColor, NULL, NULL},
+    {"MenuDisabledColor", "\"#555555\"", NULL, NULL, getColor, setMenuDisabledColor, NULL, NULL},
+    {"MenuTitleBack", "(solid, black)", NULL, NULL, getTexture, setMenuTitleBack, NULL, NULL},
+    {"MenuTextBack", "(solid, \"#aaaaaa\")", NULL, NULL, getTexture, setMenuTextBack, NULL, NULL},
+    {"IconTitleColor", "white", NULL, NULL, getColor, setIconTitleColor, NULL, NULL},
+    {"IconTitleBack", "black", NULL, NULL, getColor, setIconTitleBack, NULL, NULL},
+    {"SwitchPanelImages", "(swtile.png, swback.png, 30, 40)", &wPreferences, NULL, getPropList,
+     setSwPOptions, NULL, NULL},
+    {"ModifierKeyLabels",
+     "(\"Shift+\", \"Control+\", \"Alt+\", \"Mod2+\", \"Mod3+\", \"Super+\", \"Mod5+\")",
+     &wPreferences, NULL, getPropList, setModifierKeyLabels, NULL, NULL},
+    {"FrameBorderWidth", "1", NULL, NULL, getInt, setFrameBorderWidth, NULL, NULL},
+    {"FrameBorderColor", "black", NULL, NULL, getColor, setFrameBorderColor, NULL, NULL},
+    {"FrameFocusedBorderColor", "black", NULL, NULL, getColor, setFrameFocusedBorderColor, NULL,
+     NULL},
+    {"FrameSelectedBorderColor", "white", NULL, NULL, getColor, setFrameSelectedBorderColor, NULL,
+     NULL},
+    {"WorkspaceMapBack", "(solid, black)", NULL, NULL, getTexture, setWorkspaceMapBackground, NULL,
+     NULL},
 
-  /* --- Key bindings --- */
+    /* --- Key bindings --- */
 
-  {"CommandModifierKey", "Alt", NULL, &wPreferences.cmd_modifier_mask, getModMask, NULL, NULL, NULL},
-  {"AlternateModifierKey", "Super", NULL, &wPreferences.alt_modifier_mask, getAltModMask, NULL, NULL, NULL},
-  /* Dock and Icon Yard */
-  /* {"DockHideShowKey", "\"Alternate+D\"", (void *)WKBD_DOCKHIDESHOW, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"IconYardHideShowKey", "\"Alternate+Y\"", (void *)WKBD_YARDHIDESHOW, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* Window Resizing */
-  /* {"MaximusKey", "\"Super+KP_5\"", (void *)WKBD_MAXIMUS, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"ShadeKey", "\"Alternate+KP_Subtract\"", (void *)WKBD_SHADE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"MaximizeKey", "\"Alternate+KP_Add\"", (void *)WKBD_MAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"VMaximizeKey", "\"Alternate+Up\"", (void *)WKBD_VMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"HMaximizeKey", "\"Alternate+Right\"", (void *)WKBD_HMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"LHMaximizeKey", "\"Alternate+KP_4\"", (void *)WKBD_LHMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"RHMaximizeKey", "\"Alternate+KP_6\"", (void *)WKBD_RHMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"THMaximizeKey", "\"Alternate+KP_8\"", (void *)WKBD_THMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"BHMaximizeKey", "\"Alternate+KP_2\"", (void *)WKBD_BHMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"LTCMaximizeKey", "\"Alternate+KP_7\"", (void *)WKBD_LTCMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"RTCMaximizeKey", "\"Alternate+KP_9\"", (void *)WKBD_RTCMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"LBCMaximizeKey", "\"Alternate+KP_1\"", (void *)WKBD_LBCMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"RBCMaximizeKey", "\"Alternate+KP_3\"", (void *)WKBD_RBCMAXIMIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* Window Ordering */
-  /* {"CloseKey", "\"Command+w\"", (void *)WKBD_CLOSE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"HideKey", "\"Command+h\"", (void *)WKBD_HIDE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"HideOthersKey", "\"Command+H\"", (void *)WKBD_HIDE_OTHERS, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"MiniaturizeKey", "\"Command+m\"", (void *)WKBD_MINIATURIZE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"MinimizeAllKey", "\"Command+M\"", (void *)WKBD_MINIMIZEALL, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* Focus switch */
-  /* {"RaiseKey", "\"Command+Up\"", (void *)WKBD_RAISE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  /* {"LowerKey", "\"Command+Down\"", (void *)WKBD_LOWER, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
-  {"FocusNextKey", "\"Command+Tab\"", (void *)WKBD_FOCUSNEXT, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"FocusPrevKey", "\"Command+Shift+Tab\"", (void *)WKBD_FOCUSPREV, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"GroupNextKey", "\"Command+grave\"", (void *)WKBD_GROUPNEXT, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"GroupPrevKey", "\"Command+Shift+grave\"", (void *)WKBD_GROUPPREV, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  /* Workspaces */
-  {"NextWorkspaceKey", "\"Control+Right\"", (void *)WKBD_NEXT_DESKTOP, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"PrevWorkspaceKey", "\"Control+Left\"", (void *)WKBD_PREV_DESKTOP, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"LastWorkspaceKey", "None", (void *)WKBD_LAST_DESKTOP, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop1Key", "\"Control+1\"", (void *)WKBD_DESKTOP_1, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop2Key", "\"Control+2\"", (void *)WKBD_DESKTOP_2, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop3Key", "\"Control+3\"", (void *)WKBD_DESKTOP_3, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop4Key", "\"Control+4\"", (void *)WKBD_DESKTOP_4, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop5Key", "\"Control+5\"", (void *)WKBD_DESKTOP_5, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop6Key", "\"Control+6\"", (void *)WKBD_DESKTOP_6, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop7Key", "\"Control+7\"", (void *)WKBD_DESKTOP_7, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop8Key", "\"Control+8\"", (void *)WKBD_DESKTOP_8, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop9Key", "\"Control+9\"", (void *)WKBD_DESKTOP_9, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  {"Desktop10Key", "\"Control+0\"", (void *)WKBD_DESKTOP_10, NULL, getKeybind, setKeyGrab, NULL, NULL},
-  
-  {"WindowRelaunchKey", "None", (void *)WKBD_RELAUNCH, NULL, getKeybind, setKeyGrab, NULL, NULL},
+    {"CommandModifierKey", "Alt", NULL, &wPreferences.cmd_modifier_mask, getModMask, NULL, NULL,
+     NULL},
+    {"AlternateModifierKey", "Super", NULL, &wPreferences.alt_modifier_mask, getAltModMask, NULL,
+     NULL, NULL},
+    /* Dock and Icon Yard */
+    /* {"DockHideShowKey", "\"Alternate+D\"", (void *)WKBD_DOCKHIDESHOW, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"IconYardHideShowKey", "\"Alternate+Y\"", (void *)WKBD_YARDHIDESHOW, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* Window Resizing */
+    /* {"MaximusKey", "\"Super+KP_5\"", (void *)WKBD_MAXIMUS, NULL, getKeybind, setKeyGrab, NULL,
+       NULL}, */
+    /* {"ShadeKey", "\"Alternate+KP_Subtract\"", (void *)WKBD_SHADE, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* {"MaximizeKey", "\"Alternate+KP_Add\"", (void *)WKBD_MAXIMIZE, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* {"VMaximizeKey", "\"Alternate+Up\"", (void *)WKBD_VMAXIMIZE, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* {"HMaximizeKey", "\"Alternate+Right\"", (void *)WKBD_HMAXIMIZE, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* {"LHMaximizeKey", "\"Alternate+KP_4\"", (void *)WKBD_LHMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"RHMaximizeKey", "\"Alternate+KP_6\"", (void *)WKBD_RHMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"THMaximizeKey", "\"Alternate+KP_8\"", (void *)WKBD_THMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"BHMaximizeKey", "\"Alternate+KP_2\"", (void *)WKBD_BHMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"LTCMaximizeKey", "\"Alternate+KP_7\"", (void *)WKBD_LTCMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"RTCMaximizeKey", "\"Alternate+KP_9\"", (void *)WKBD_RTCMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"LBCMaximizeKey", "\"Alternate+KP_1\"", (void *)WKBD_LBCMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* {"RBCMaximizeKey", "\"Alternate+KP_3\"", (void *)WKBD_RBCMAXIMIZE, NULL, getKeybind,
+       setKeyGrab, NULL, NULL}, */
+    /* Window Ordering */
+    /* {"CloseKey", "\"Command+w\"", (void *)WKBD_CLOSE, NULL, getKeybind, setKeyGrab, NULL, NULL},
+     */
+    /* {"HideKey", "\"Command+h\"", (void *)WKBD_HIDE, NULL, getKeybind, setKeyGrab, NULL, NULL}, */
+    /* {"HideOthersKey", "\"Command+H\"", (void *)WKBD_HIDE_OTHERS, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* {"MiniaturizeKey", "\"Command+m\"", (void *)WKBD_MINIATURIZE, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* {"MinimizeAllKey", "\"Command+M\"", (void *)WKBD_MINIMIZEALL, NULL, getKeybind, setKeyGrab,
+       NULL, NULL}, */
+    /* Focus switch */
+    /* {"RaiseKey", "\"Command+Up\"", (void *)WKBD_RAISE, NULL, getKeybind, setKeyGrab, NULL, NULL},
+     */
+    /* {"LowerKey", "\"Command+Down\"", (void *)WKBD_LOWER, NULL, getKeybind, setKeyGrab, NULL,
+       NULL}, */
+    {"FocusNextKey", "\"Command+Tab\"", (void *)WKBD_FOCUSNEXT, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"FocusPrevKey", "\"Command+Shift+Tab\"", (void *)WKBD_FOCUSPREV, NULL, getKeybind, setKeyGrab,
+     NULL, NULL},
+    {"GroupNextKey", "\"Command+grave\"", (void *)WKBD_GROUPNEXT, NULL, getKeybind, setKeyGrab,
+     NULL, NULL},
+    {"GroupPrevKey", "\"Command+Shift+grave\"", (void *)WKBD_GROUPPREV, NULL, getKeybind,
+     setKeyGrab, NULL, NULL},
+    /* Workspaces */
+    {"NextWorkspaceKey", "\"Control+Right\"", (void *)WKBD_NEXT_DESKTOP, NULL, getKeybind,
+     setKeyGrab, NULL, NULL},
+    {"PrevWorkspaceKey", "\"Control+Left\"", (void *)WKBD_PREV_DESKTOP, NULL, getKeybind,
+     setKeyGrab, NULL, NULL},
+    {"LastWorkspaceKey", "None", (void *)WKBD_LAST_DESKTOP, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop1Key", "\"Control+1\"", (void *)WKBD_DESKTOP_1, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop2Key", "\"Control+2\"", (void *)WKBD_DESKTOP_2, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop3Key", "\"Control+3\"", (void *)WKBD_DESKTOP_3, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop4Key", "\"Control+4\"", (void *)WKBD_DESKTOP_4, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop5Key", "\"Control+5\"", (void *)WKBD_DESKTOP_5, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop6Key", "\"Control+6\"", (void *)WKBD_DESKTOP_6, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop7Key", "\"Control+7\"", (void *)WKBD_DESKTOP_7, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop8Key", "\"Control+8\"", (void *)WKBD_DESKTOP_8, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop9Key", "\"Control+9\"", (void *)WKBD_DESKTOP_9, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"Desktop10Key", "\"Control+0\"", (void *)WKBD_DESKTOP_10, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
 
-  /* --- Mouse cursors --- */
-  {"NormalCursor", "(builtin, left_ptr)", (void *)WCUR_ROOT, NULL, getCursor, setCursor, NULL, NULL},
-  {"ArrowCursor", "(builtin, left_ptr)", (void *)WCUR_ARROW, NULL, getCursor, setCursor, NULL, NULL},
-  {"ResizeCursor", "(builtin, sizing)", (void *)WCUR_RESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"WaitCursor", "(builtin, watch)", (void *)WCUR_WAIT, NULL, getCursor, setCursor, NULL, NULL},
-  {"QuestionCursor", "(builtin, question_arrow)", (void *)WCUR_QUESTION, NULL, getCursor, setCursor, NULL, NULL},
-  {"TextCursor", "(builtin, xterm)", (void *)WCUR_TEXT, NULL, getCursor, setCursor, NULL, NULL},
-  {"SelectCursor", "(builtin, cross)", (void *)WCUR_SELECT, NULL, getCursor, setCursor, NULL, NULL},  
-  {"MoveCursor", "(library, move)", (void *)WCUR_MOVE, NULL, getCursor, setCursor, NULL, NULL},
-  {"TopLeftResizeCursor", "(library, bd_double_arrow)", (void *)WCUR_TOPLEFTRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"TopRightResizeCursor", "(library, fd_double_arrow)", (void *)WCUR_TOPRIGHTRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"BottomLeftResizeCursor", "(library, fd_double_arrow)", (void *)WCUR_BOTTOMLEFTRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"BottomRightResizeCursor", "(library, bd_double_arrow)", (void *)WCUR_BOTTOMRIGHTRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"VerticalResizeCursor", "(library, wm_v_double_arrow)", (void *)WCUR_VERTICALRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"HorizontalResizeCursor", "(library, wm_h_double_arrow)", (void *)WCUR_HORIZONRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"UpResizeCursor", "(library, wm_up_arrow)", (void *)WCUR_UPRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"DownResizeCursor", "(library, wm_down_arrow)", (void *)WCUR_DOWNRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"LeftResizeCursor", "(library, wm_left_arrow)", (void *)WCUR_LEFTRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"RightResizeCursor", "(library, wm_right_arrow)", (void *)WCUR_RIGHTRESIZE, NULL, getCursor, setCursor, NULL, NULL},
-  {"DialogHistoryLines", "500", NULL, &wPreferences.history_lines, getInt, NULL, NULL, NULL},
-  {"CycleActiveHeadOnly", "NO", NULL, &wPreferences.cycle_active_head_only, getBool, NULL, NULL, NULL},
-  {"CycleIgnoreMinimized", "NO", NULL, &wPreferences.cycle_ignore_minimized, getBool, NULL, NULL, NULL}
-};
+    {"WindowRelaunchKey", "None", (void *)WKBD_RELAUNCH, NULL, getKeybind, setKeyGrab, NULL, NULL},
+
+    /* --- Mouse cursors --- */
+    {"NormalCursor", "(builtin, left_ptr)", (void *)WCUR_ROOT, NULL, getCursor, setCursor, NULL,
+     NULL},
+    {"ArrowCursor", "(builtin, left_ptr)", (void *)WCUR_ARROW, NULL, getCursor, setCursor, NULL,
+     NULL},
+    {"ResizeCursor", "(builtin, sizing)", (void *)WCUR_RESIZE, NULL, getCursor, setCursor, NULL,
+     NULL},
+    {"WaitCursor", "(builtin, watch)", (void *)WCUR_WAIT, NULL, getCursor, setCursor, NULL, NULL},
+    {"QuestionCursor", "(builtin, question_arrow)", (void *)WCUR_QUESTION, NULL, getCursor,
+     setCursor, NULL, NULL},
+    {"TextCursor", "(builtin, xterm)", (void *)WCUR_TEXT, NULL, getCursor, setCursor, NULL, NULL},
+    {"SelectCursor", "(builtin, cross)", (void *)WCUR_SELECT, NULL, getCursor, setCursor, NULL,
+     NULL},
+    {"MoveCursor", "(library, move)", (void *)WCUR_MOVE, NULL, getCursor, setCursor, NULL, NULL},
+    {"TopLeftResizeCursor", "(library, bd_double_arrow)", (void *)WCUR_TOPLEFTRESIZE, NULL,
+     getCursor, setCursor, NULL, NULL},
+    {"TopRightResizeCursor", "(library, fd_double_arrow)", (void *)WCUR_TOPRIGHTRESIZE, NULL,
+     getCursor, setCursor, NULL, NULL},
+    {"BottomLeftResizeCursor", "(library, fd_double_arrow)", (void *)WCUR_BOTTOMLEFTRESIZE, NULL,
+     getCursor, setCursor, NULL, NULL},
+    {"BottomRightResizeCursor", "(library, bd_double_arrow)", (void *)WCUR_BOTTOMRIGHTRESIZE, NULL,
+     getCursor, setCursor, NULL, NULL},
+    {"VerticalResizeCursor", "(library, wm_v_double_arrow)", (void *)WCUR_VERTICALRESIZE, NULL,
+     getCursor, setCursor, NULL, NULL},
+    {"HorizontalResizeCursor", "(library, wm_h_double_arrow)", (void *)WCUR_HORIZONRESIZE, NULL,
+     getCursor, setCursor, NULL, NULL},
+    {"UpResizeCursor", "(library, wm_up_arrow)", (void *)WCUR_UPRESIZE, NULL, getCursor, setCursor,
+     NULL, NULL},
+    {"DownResizeCursor", "(library, wm_down_arrow)", (void *)WCUR_DOWNRESIZE, NULL, getCursor,
+     setCursor, NULL, NULL},
+    {"LeftResizeCursor", "(library, wm_left_arrow)", (void *)WCUR_LEFTRESIZE, NULL, getCursor,
+     setCursor, NULL, NULL},
+    {"RightResizeCursor", "(library, wm_right_arrow)", (void *)WCUR_RIGHTRESIZE, NULL, getCursor,
+     setCursor, NULL, NULL},
+    {"DialogHistoryLines", "500", NULL, &wPreferences.history_lines, getInt, NULL, NULL, NULL},
+    {"CycleActiveHeadOnly", "NO", NULL, &wPreferences.cycle_active_head_only, getBool, NULL, NULL,
+     NULL},
+    {"CycleIgnoreMinimized", "NO", NULL, &wPreferences.cycle_ignore_minimized, getBool, NULL, NULL,
+     NULL}};
 
 /* set `plkey` and `plvalue` fields of entries in `optionList` and `staticOptionList` */
 static void _initializeOptionLists(void)
@@ -624,38 +737,41 @@ static void _updateDomain(WDDomain *domain, Bool shouldNotify)
   }
 
 #ifdef HAVE_INOTIFY
-  wDefaultsShouldTrackChanges(domain, false);
+  if (domain->inotify_watch >= 0) {
+    wDefaultsShouldTrackChanges(domain, false);
+  }
 #endif
   
+  WMLogWarning("Updating domain %@...", domain->name);
   /* User dictionary */
   dict = (CFMutableDictionaryRef)WMUserDefaultsRead(domain->name, false);
   if (dict) {
-    if (CFGetTypeID(dict) != CFDictionaryGetTypeID()) {
-      CFRelease(dict);
-      dict = NULL;
-      WMLogError("Domain %@ of defaults database is corrupted!", domain->name);
-    }
-    else {
-      if ((scr = wDefaultScreen())) {
-        wDefaultsRead(scr, dict, shouldNotify);
+    if (CFGetTypeID(dict) == CFDictionaryGetTypeID()) {
+      if ((scr = wDefaultScreen()) && CFStringCompare(domain->name, CFSTR("WM"), 0) == 0) {
+        wDefaultsReadPreferences(scr, dict, shouldNotify);
       }
       if (domain->dictionary) {
         CFRelease(domain->dictionary);
       }
-      domain->dictionary = dict;
+      domain->dictionary = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, dict);
+    } else {
+      WMLogError("Domain %@ of defaults database is corrupted!", domain->name);
     }
-  }
-  else {
+    CFRelease(dict);
+    dict = NULL;
+  } else {
     WMLogError("Could not load domain %@. It is not dictionary!", domain->name);
     if (domain->dictionary) {
       WMLogError("Write from memory to path %@.", domain->path);
       WMUserDefaultsWrite(domain->dictionary, domain->name);
     }
   }
-  
+
   domain->timestamp = WMUserDefaultsFileModificationTime(domain->name, 0);
 #ifdef HAVE_INOTIFY
-  wDefaultsShouldTrackChanges(domain, true);
+  if (domain->shouldTrackChanges) {
+    wDefaultsShouldTrackChanges(domain, true);
+  }
 #endif
 }
 
@@ -663,11 +779,14 @@ static void _updateDomain(WDDomain *domain, Bool shouldNotify)
 
 static WDDomain *_domainForWatchDescriptor(int wd)
 {
-  if (wd == w_global.domain.wm->inotify_watch) {
-    return w_global.domain.wm;
+  if (wd == w_global.domain.wm_preferences->inotify_watch) {
+    return w_global.domain.wm_preferences;
   }
-  if (wd == w_global.domain.window_attr->inotify_watch) {
-    return w_global.domain.window_attr;
+  if (wd == w_global.domain.wm_state->inotify_watch) {
+    return w_global.domain.wm_state;
+  }
+  if (wd == w_global.domain.window_attrs->inotify_watch) {
+    return w_global.domain.window_attrs;
   }
 
   return NULL;
@@ -689,7 +808,7 @@ static void _processWatchEvents(CFFileDescriptorRef fdref, CFOptionFlags callBac
   eventQLength = read(w_global.inotify.fd_event_queue, buff, sizeof(buff));
 
   if (eventQLength < 0) {
-    WMLogWarning(_("read problem when trying to get INotify event: %s"), strerror(errno));
+    WMLogWarning("read problem when trying to get INotify event: %s", strerror(errno));
     return;
   }
 
@@ -699,31 +818,30 @@ static void _processWatchEvents(CFFileDescriptorRef fdref, CFOptionFlags callBac
 
     domain = _domainForWatchDescriptor(pevent->wd);
     if (!domain) {
-      WMLogWarning(_("inotify: ignore event for domain that is not tracked anymore."));
+      WMLogWarning("inotify [descriptor %i]: ignore event for domain that is not tracked anymore.",
+                   pevent->wd);
       goto next_event;
     }
 
     if (pevent->mask & IN_MODIFY) {
-      WMLogWarning(_("inotify: defaults domain has been modified. Rereading defaults database."));
-      /* _updateDomain(domain); */
+      WMLogWarning("inotify [descriptor %i]: defaults domain has been modified.", pevent->wd);
       wDefaultsUpdateDomainsIfNeeded(NULL);
     }
     
     if (pevent->mask & IN_MOVE_SELF) {
-      WMLogWarning(_("inotify: %i defaults domain has been moved."), pevent->wd);
-      /* _updateDomain(domain); */
+      WMLogWarning("inotify [descriptor %i]: defaults domain has been moved.", pevent->wd);
       wDefaultsUpdateDomainsIfNeeded(NULL);
     }
     
     if (pevent->mask & IN_DELETE_SELF) {
-      WMLogWarning(_("inotify: %i defaults domain has been deleted!"), pevent->wd);
-      /* _updateDomain(domain); */
+      WMLogWarning("inotify [descriptor %i]: defaults domain has been deleted.", pevent->wd);
       wDefaultsUpdateDomainsIfNeeded(NULL);
     }
     
     if (pevent->mask & IN_UNMOUNT) {
-      WMLogWarning(_("inotify: the unit containing the defaults database has"
-                 " been unmounted. Setting --static mode." " Any changes will not be saved."));
+      WMLogWarning("inotify: the unit containing the defaults database has"
+                   " been unmounted. Disabling tracking changes mode."
+                   " Any changes will not be saved.");
 
       wDefaultsShouldTrackChanges(domain, false);
       wPreferences.flags.noupdates = 1;
@@ -733,39 +851,50 @@ static void _processWatchEvents(CFFileDescriptorRef fdref, CFOptionFlags callBac
     /* move to next event in the buffer */
     i += sizeof(struct inotify_event) + pevent->len;
   }
-  
+
   CFFileDescriptorEnableCallBacks(fdref, kCFFileDescriptorReadCallBack);
+}
+
+static Bool _initializeInotify()
+{
+  w_global.inotify.fd_event_queue = inotify_init();
+  if (w_global.inotify.fd_event_queue < 0) {
+    WMLogWarning("** inotify ** could not initialise an inotify instance."
+                 " Changes to the defaults database will require a restart to take effect.");
+    return False;
+  } else {  // Add to runloop
+    CFFileDescriptorRef ifd = NULL;
+    CFRunLoopSourceRef ifd_source = NULL;
+
+    ifd = CFFileDescriptorCreate(kCFAllocatorDefault, w_global.inotify.fd_event_queue, true,
+                                 _processWatchEvents, NULL);
+    CFFileDescriptorEnableCallBacks(ifd, kCFFileDescriptorReadCallBack);
+
+    ifd_source = CFFileDescriptorCreateRunLoopSource(kCFAllocatorDefault, ifd, 0);
+    CFRunLoopAddSource(wm_runloop, ifd_source, kCFRunLoopDefaultMode);
+    CFRelease(ifd_source);
+    CFRelease(ifd);
+  }
+
+  return True;
 }
 
 void wDefaultsShouldTrackChanges(WDDomain *domain, Bool shouldTrack)
 {
   CFStringRef domainPath = NULL;
-  const char  *watchPath = NULL;
+  const char *watchPath = NULL;
 
-  if (!domain)
+  if (!domain) {
     return;
+  }
 
-  // Initialize inotify
-  if (w_global.inotify.fd_event_queue < 0) {
-    w_global.inotify.fd_event_queue = inotify_init();
-    if (w_global.inotify.fd_event_queue < 0) {
-      WMLogWarning(_("** inotify ** could not initialise an inotify instance."
-                     " Changes to the defaults database will require a restart to take effect."));
-      return;
-    }
-    else { // Add to runloop
-      CFFileDescriptorRef ifd = NULL;
-      CFRunLoopSourceRef  ifd_source = NULL;
-  
-      ifd = CFFileDescriptorCreate(kCFAllocatorDefault, w_global.inotify.fd_event_queue, true,
-                                   _processWatchEvents, NULL);
-      CFFileDescriptorEnableCallBacks(ifd, kCFFileDescriptorReadCallBack);
+  if (!wm_runloop) {
+    return;
+  }
 
-      ifd_source = CFFileDescriptorCreateRunLoopSource(kCFAllocatorDefault, ifd, 0);
-      CFRunLoopAddSource(wm_runloop, ifd_source, kCFRunLoopDefaultMode);
-      CFRelease(ifd_source);
-      CFRelease(ifd);
-    }
+  // Initialize inotify if needed
+  if ((w_global.inotify.fd_event_queue < 0) && (_initializeInotify() == False)) {
+    return;
   }
 
   // Create watcher
@@ -779,32 +908,40 @@ void wDefaultsShouldTrackChanges(WDDomain *domain, Bool shouldTrack)
     domain->inotify_watch = inotify_add_watch(w_global.inotify.fd_event_queue, watchPath, mask);
     
     if (domain->inotify_watch < 0) {
-      WMLogWarning(_("** inotify ** could not add an inotify watch on path %s (error: %i %s)."
-                     " Changes to the defaults database will require a restart to take effect."),
+      WMLogWarning("** inotify ** could not add an inotify watch on path %s (error: %i %s)."
+                   " Changes to the defaults database will require a restart to take effect.",
                    watchPath, errno, strerror(errno));
     }
     CFRelease(domainPath);
-  }
-  else if (domain->inotify_watch >= 0) {
+  } else if (domain->inotify_watch >= 0) {
     WMLogError("inotify: will remove watch for %@.", domain->name);
-
-    if (domain->inotify_watch >= 0) {
-      inotify_rm_watch(w_global.inotify.fd_event_queue, domain->inotify_watch);
-    }
+    inotify_rm_watch(w_global.inotify.fd_event_queue, domain->inotify_watch);
     domain->inotify_watch = -1;
   }
+  // else shouldTrack == false but domain is not tracked for changes - do nothing.
 }
 
 #endif /* HAVE_INOTIFY */
 
+static void _settingsObserver(CFNotificationCenterRef center,
+                              void *observer,  // NULL
+                              CFNotificationName name,
+                              const void *object,  // object - ignored
+                              CFDictionaryRef userInfo)
+{
+  wDefaultsUpdateDomainsIfNeeded(NULL);
+}
+
 // Called from startup.c
+static Bool isOptionListsIntialized = false;
+static Bool isObserverSet = false;
 WDDomain *wDefaultsInitDomain(const char *domain_name, Bool shouldTrackChanges)
 {
   WDDomain *domain;
-  static int inited = 0;
+  CFMutableDictionaryRef dict;
 
-  if (!inited) {
-    inited = 1;
+  if (isOptionListsIntialized == false) {
+    isOptionListsIntialized = true;
     _initializeOptionLists();
   }
 
@@ -814,23 +951,25 @@ WDDomain *wDefaultsInitDomain(const char *domain_name, Bool shouldTrackChanges)
   domain = wmalloc(sizeof(WDDomain));
   domain->name = CFStringCreateWithCString(kCFAllocatorDefault, domain_name, kCFStringEncodingUTF8);
   domain->inotify_watch = -1;
+  domain->shouldTrackChanges = shouldTrackChanges;
 
-  domain->dictionary = (CFMutableDictionaryRef)WMUserDefaultsRead(domain->name, true);
-  if (domain->dictionary) {
-    if ((CFGetTypeID(domain->dictionary) != CFDictionaryGetTypeID())) {
-      CFRelease(domain->dictionary);
+  // Initializing domain->dictionary
+  dict = (CFMutableDictionaryRef)WMUserDefaultsRead(domain->name, true);
+  if (dict) {
+    if ((CFGetTypeID(dict) != CFDictionaryGetTypeID())) {
+      CFRelease(dict);
       domain->dictionary = NULL;
-      WMLogError(_("domain %s (%s) of defaults database is corrupted!"), domain_name,
-                 WMUserDefaultsGetCString(CFURLGetString(domain->path), kCFStringEncodingUTF8));
+      WMLogError("domain %s (%@) of defaults database is corrupted!", domain_name,
+                 CFURLGetString(domain->path));
     }
-  }
-  else {
+    domain->dictionary = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, dict);
+    CFRelease(dict);
+  } else {
     WMLogError("creating empty domain: %@", domain->name);
-    domain->dictionary = CFDictionaryCreateMutable(kCFAllocatorDefault, 1,
-                                                   &kCFTypeDictionaryKeyCallBacks,
-                                                   &kCFTypeDictionaryValueCallBacks);
+    domain->dictionary = CFDictionaryCreateMutable(
+        kCFAllocatorDefault, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
   }
-  
+
   if (domain->dictionary && WMUserDefaultsWrite(domain->dictionary, domain->name)) {
     CFURLRef osURL;
     
@@ -840,9 +979,14 @@ WDDomain *wDefaultsInitDomain(const char *domain_name, Bool shouldTrackChanges)
     domain->path = CFURLCreateCopyAppendingPathExtension(NULL, osURL, CFSTR("plist"));
     CFRelease(osURL);
 
-    if (wm_runloop) {
-      WMLogInfo("start tracking changes for domain: %@", domain->name);
-      wDefaultsShouldTrackChanges(domain, shouldTrackChanges);
+    wDefaultsShouldTrackChanges(domain, shouldTrackChanges);
+
+    // first domain without tracking changes (inotify)
+    if ((shouldTrackChanges == false) && (isObserverSet == false)) {
+      WMLogError("Setting up `WMSettingsDidChangeNotification` observer...");
+      CFNotificationCenterAddObserver(CFNotificationCenterGetLocalCenter(), NULL, _settingsObserver,
+                                      WMDidChangeAppearanceSettingsNotification, NULL,
+                                      CFNotificationSuspensionBehaviorDeliverImmediately);
     }
   }
 
@@ -851,7 +995,7 @@ WDDomain *wDefaultsInitDomain(const char *domain_name, Bool shouldTrackChanges)
 
 // Called from startup.c
 // Apply `plvalue` from `dict` to appropriate `entry->addr` specified in `staticOptionList`
-void wDefaultsReadStatic(CFMutableDictionaryRef dict)
+void wDefaultsReadStaticPreferences(CFMutableDictionaryRef dict)
 {
   CFTypeRef plvalue;
   WDefaultEntry *entry;
@@ -885,64 +1029,67 @@ void wDefaultsReadStatic(CFMutableDictionaryRef dict)
   }
 }
 
-// Apply `plvalue` from `new_dict` to appropriate `entry->addr` specified in `optionList`
-void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNotify)
+// Propagates `optionList` values to `wPreferences`, `WScreen` or other global variable.
+// If option exists in `new_dict` - use it instead.
+// Usually `new_dict` is a `w_global.domain.wm_preferences->dictionary` which is the in-memory
+// representation of WM.plist file.
+//
+// Function applies `plvalue` from `new_dict` to appropriate `entry->addr` specified in `optionList`.
+// `entry->addr` is a wPreferences member or `NULL`. `NULL` means that `entry->update` callback
+// sets value to appropriate structure (for example, WScreen) or global variable.
+void wDefaultsReadPreferences(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNotify)
 {
+  CFDictionaryRef old_dict = NULL;
   CFTypeRef plvalue = NULL;
-  CFTypeRef old_value = NULL;
+  CFTypeRef old_plvalue = NULL;
   WDefaultEntry *entry;
   unsigned int i;
   unsigned int needs_refresh = 0;
   void *tdata;
-  CFDictionaryRef old_dict = NULL;
 
-  if (w_global.domain.wm->dictionary != new_dict)
-    old_dict = w_global.domain.wm->dictionary;
+  WMLogWarning("Reading preferences from WM.plist....");
 
-  needs_refresh = 0;
+  if (w_global.domain.wm_preferences->dictionary != new_dict) {
+    old_dict = w_global.domain.wm_preferences->dictionary;
+  }
+
+  WMLogWarning("WindowTitleFont from new_dict %@", CFDictionaryGetValue(new_dict, CFSTR("WindowTitleFont")));
 
   for (i = 0; i < wlengthof(optionList); i++) {
     entry = &optionList[i];
 
     if (new_dict) {
       plvalue = CFDictionaryGetValue(new_dict, entry->plkey);
-    }
-    else {
+    } else {
       plvalue = NULL;
     }
-    
-    if (!old_dict) {
-      old_value = NULL;
-    }
-    else {
-      old_value = CFDictionaryGetValue(old_dict, entry->plkey);
+
+    if (old_dict) {
+      old_plvalue = CFDictionaryGetValue(old_dict, entry->plkey);
+    } else {
+      old_plvalue = NULL;
     }
 
     // No need to hold default value in dictionary
-    /* WMLogError("Check if default exist: %@", entry->plkey); */
     if (plvalue && CFEqual(plvalue, entry->plvalue)) {
       plvalue = NULL;
-      /* WMLogError("Removing setting equal to default: %@", entry->plkey); */
       CFDictionaryRemoveValue(new_dict, entry->plkey);
-      /* WMLogError("Removed"); */
     }
 
     if (!plvalue) {
-      /* value was deleted from DB. Keep current value */
+      // value was deleted from DB. Keep current value
       plvalue = entry->plvalue;
-      /* continue; */
-    }
-    else if (!old_value) {
-      /* set value for the 1st time */
-    }
-    else if (CFEqual(plvalue, old_value)) {
-      /* value was not changed since last time */
+    } else if (!old_plvalue) {
+      // set value for the 1st time
+    } else if (CFEqual(plvalue, old_plvalue)) {
+      // value was not changed since last time
       continue;
     }
 
     if (plvalue) {
-      /* convert data */
+      // convert data
       if ((*entry->convert) (scr, entry, plvalue, entry->addr, &tdata)) {
+        // propagate converted value
         if (entry->update) {
           needs_refresh |= (*entry->update) (scr, entry, tdata, entry->extra_data);
         }
@@ -950,7 +1097,7 @@ void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNot
     }
   }
 
-  if (shouldNotify && needs_refresh != 0/* && !scr->flags.startup && !scr->flags.startup2*/) {
+  if (shouldNotify && needs_refresh != 0 /* && !scr->flags.startup && !scr->flags.startup2*/) {
     int foo;
 
     foo = 0;
@@ -962,8 +1109,8 @@ void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNot
       foo |= WColorSettings;
     if (foo) {
       CFNotificationCenterPostNotification(CFNotificationCenterGetLocalCenter(),
-                                           WMDidChangeMenuTitleAppearanceSettings, 
-                                           (void *)(uintptr_t) foo, NULL, TRUE);
+                                           WMDidChangeMenuTitleAppearanceSettings,
+                                           (void *)(uintptr_t)foo, NULL, TRUE);
     }
     foo = 0;
     if (needs_refresh & REFRESH_MENU_TEXTURE)
@@ -974,8 +1121,8 @@ void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNot
       foo |= WColorSettings;
     if (foo) {
       CFNotificationCenterPostNotification(CFNotificationCenterGetLocalCenter(),
-                                           WMDidChangeMenuAppearanceSettings, 
-                                           (void *)(uintptr_t) foo, NULL, TRUE);
+                                           WMDidChangeMenuAppearanceSettings,
+                                           (void *)(uintptr_t)foo, NULL, TRUE);
     }
     foo = 0;
     if (needs_refresh & REFRESH_WINDOW_FONT)
@@ -986,8 +1133,8 @@ void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNot
       foo |= WColorSettings;
     if (foo) {
       CFNotificationCenterPostNotification(CFNotificationCenterGetLocalCenter(),
-                                           WMDidChangeWindowAppearanceSettings, 
-                                           (void *)(uintptr_t) foo, NULL, TRUE);
+                                           WMDidChangeWindowAppearanceSettings,
+                                           (void *)(uintptr_t)foo, NULL, TRUE);
     }
     if (!(needs_refresh & REFRESH_ICON_TILE)) {
       foo = 0;
@@ -999,7 +1146,7 @@ void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNot
         foo |= WTextureSettings;
       if (foo) {
         CFNotificationCenterPostNotification(CFNotificationCenterGetLocalCenter(),
-                                             WMDidChangeIconAppearanceSettings, 
+                                             WMDidChangeIconAppearanceSettings,
                                              (void *)(uintptr_t)foo, NULL, TRUE);
       }
     }
@@ -1012,22 +1159,28 @@ void wDefaultsRead(WScreen *scr, CFMutableDictionaryRef new_dict, Bool shouldNot
 }
 
 // Update in-memory representaion of user defaults.
-// Also used as CFTimer callback.
+// Also used as CFTimer callback - that's why argument exists.
 void wDefaultsUpdateDomainsIfNeeded(void* arg)
 {
   WScreen *scr;
   CFAbsoluteTime time = 0.0;
 
-  // ~/Library/Preferences/.NextSpace/WM
-  time = WMUserDefaultsFileModificationTime(w_global.domain.wm->name, 0);
-  if (w_global.domain.wm->timestamp < time) {
-    _updateDomain(w_global.domain.wm, True);
+   // ~/Library/Preferences/.NextSpace/WM.plist
+  time = WMUserDefaultsFileModificationTime(w_global.domain.wm_preferences->name, 0);
+  if (w_global.domain.wm_preferences->timestamp < time) {
+    _updateDomain(w_global.domain.wm_preferences, True);
   }
 
-  // ~/Library/Preferences/.NextSpace/WMWindowAttributes
-  time = WMUserDefaultsFileModificationTime(w_global.domain.window_attr->name, 0);
-  if (w_global.domain.window_attr->timestamp < time) {
-    _updateDomain(w_global.domain.window_attr, False);
+  // ~/Library/Preferences/.NextSpace/WMState.plist
+  time = WMUserDefaultsFileModificationTime(w_global.domain.wm_state->name, 0);
+  if (w_global.domain.wm_state->timestamp < time) {
+    _updateDomain(w_global.domain.wm_state, True);
+  }
+
+  // ~/Library/Preferences/.NextSpace/WMWindowAttributes.plist
+  time = WMUserDefaultsFileModificationTime(w_global.domain.window_attrs->name, 0);
+  if (w_global.domain.window_attrs->timestamp < time) {
+    _updateDomain(w_global.domain.window_attrs, False);
     if ((scr = wDefaultScreen())) {
       _updateApplicationIcons(scr);
     }
@@ -2474,6 +2627,19 @@ static int setLargeDisplayFont(WScreen *scr, WDefaultEntry *entry, void *tdata, 
     WMReleaseFont(scr->workspace_name_font);
 
   scr->workspace_name_font = font;
+
+  return 0;
+}
+
+static int setAntialiasedText(WScreen *scr, WDefaultEntry *entry, void *tdata, void *foo)
+{
+  char *flag = tdata;
+
+  /* Parameter not used, but tell the compiler that it is ok */
+  (void) entry;
+  (void) foo;
+
+  scr->wmscreen->antialiasedText = *flag;
 
   return 0;
 }

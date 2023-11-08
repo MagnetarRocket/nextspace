@@ -257,9 +257,7 @@ WMScreen *WMCreateScreenWithRContext(Display *display, int screen, RContext *con
 
   scrPtr->stipple = stipple;
 
-  /* scrPtr->antialiasedText = WINGsConfiguration.antialiasedText; */
-  scrPtr->antialiasedText = False; /* TODO */
-  WMLogWarning("[TODO] Antialised text is set to false. No option exists to configure it.");
+  scrPtr->antialiasedText = False;
 
   scrPtr->normalFont = WMSystemFontOfSize(scrPtr, 0);
 

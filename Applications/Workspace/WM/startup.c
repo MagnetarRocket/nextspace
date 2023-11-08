@@ -80,6 +80,7 @@
 #include "xmodifier.h"
 #include "dock.h"
 #include "application.h"
+#include "wmcomposer.h"
 
 /****** Global ******/
 Display *dpy;
@@ -114,9 +115,12 @@ CFStringRef WMDidChangeMenuTitleAppearanceSettings =
     CFSTR("WMDidChangeMenuTitleAppearanceSettings");
 
 CFStringRef WMDidChangeKeyboardLayoutNotification = CFSTR("WMDidChangeKeyboardLayoutNotification");
-CFStringRef WMDidChangeDockContentNotification = CFSTR("WMDidChangeDockContentNotification");
 
-/* GNUstep applications notifications */
+/* GNUstep applications notifications. Public ObjC part resides in DesktopKit/NXTWorkspace.h */
+// WM.plist
+CFStringRef WMDidChangeAppearanceSettingsNotification = CFSTR("WMDidChangeAppearanceSettingsNotification");
+// WMState.plist
+CFStringRef WMDidChangeDockContentNotification = CFSTR("WMDidChangeDockContentNotification");
 // Hide Others
 CFStringRef WMShouldHideOthersNotification = CFSTR("WMShouldHideOthersNotification");
 CFStringRef WMDidHideOthersNotification = CFSTR("WMDidHideOthersNotification");
@@ -175,7 +179,10 @@ static int _catchXError(Display *dpy, XErrorEvent *error)
        */
        || (error->request_code == X_InstallColormap))) {
     return 0;
+  } else if (wComposerErrorHandler(dpy, error)) {
+    return 0;
   }
+
   FormatXError(dpy, error, buffer, MAXLINE);
   WMLogWarning(_("internal X error: %s"), buffer);
   return -1;
@@ -646,29 +653,41 @@ void wStartUp(Bool defaultScreenOnly)
   /* set hook for out event dispatcher in WINGs event dispatcher */
   WMHookEventHandler(DispatchEvent);
 
-  /* initialize defaults stuff */
-  w_global.domain.wm = wDefaultsInitDomain("WMState", true);
-  if (!w_global.domain.wm->dictionary) {
-    WMLogWarning(_("could not read domain \"%s\" from defaults database"), "WMState");
+  /*
+    Initialize defaults stuff
+  */
+  // Read defaults from WM.plist file. This file may not exist - use hardcoded defults (defaults.c).
+  // Defaults are propagated into wPreferences, WScreen.
+  w_global.domain.wm_preferences = wDefaultsInitDomain("WM", false);
+  if (!w_global.domain.wm_preferences->dictionary) {
+    WMLogWarning("could not read domain \"WM\" from defaults database");
   }
 
-  /* read defaults that don't change until a restart and are screen independent */
-  wDefaultsReadStatic(w_global.domain.wm ? w_global.domain.wm->dictionary : NULL);
-  if (w_global.domain.wm) {
-    WMUserDefaultsWrite(w_global.domain.wm->dictionary, w_global.domain.wm->name);
+  // Process defaults that don't change until a restart and are screen independent.
+  // Were read from WM.plist on previous step.
+  if (w_global.domain.wm_preferences) {
+    wDefaultsReadStaticPreferences(w_global.domain.wm_preferences->dictionary);
+    // WMUserDefaultsWrite(w_global.domain.wm_preferences->dictionary, w_global.domain.wm_preferences->name);
+  } else {
+    wDefaultsReadStaticPreferences(NULL);
+  }
+
+  w_global.domain.wm_state = wDefaultsInitDomain("WMState", true);
+  if (!w_global.domain.wm_state->dictionary) {
+    WMLogWarning("could not read domain \"WMState\" from defaults database");
   }
 
   /* check sanity of some values */
   if (wPreferences.icon_size < 64) {
-    WMLogWarning(_("Icon size is configured to %i, but it's too small. Using 64 instead"),
+    WMLogWarning("Icon size is configured to %i, but it's too small. Using 64 instead",
                  wPreferences.icon_size);
     wPreferences.icon_size = 64;
   }
 
   /* init other domains */
-  w_global.domain.window_attr = wDefaultsInitDomain("WMWindowAttributes", true);
-  if (!w_global.domain.window_attr->dictionary) {
-    WMLogWarning(_("could not read domain \"%s\" from defaults database"), "WMWindowAttributes");
+  w_global.domain.window_attrs = wDefaultsInitDomain("WMWindowAttributes", true);
+  if (!w_global.domain.window_attrs->dictionary) {
+    WMLogWarning("could not read domain \"WMWindowAttributes\" from defaults database");
   }
 
   wSetErrorHandler();

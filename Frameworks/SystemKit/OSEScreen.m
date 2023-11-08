@@ -34,6 +34,8 @@ typedef struct _XRRScreenResources {
 */
 
 #import <AppKit/NSGraphics.h>
+#include <X11/Xlib.h>
+#include <X11/X.h>
 #import <DesktopKit/NXTAlert.h>
 #import <DesktopKit/NXTDefaults.h>
 #include <X11/Xatom.h>
@@ -304,6 +306,8 @@ static OSEScreen *systemScreen = nil;
   }
 
   useAutosave = NO;
+  background_pixmap = None;
+  background_gc = None;
 
   // Workspace Manager notification sent as a reaction to XRRScreenChangeNotify
   [[NSDistributedNotificationCenter defaultCenter]
@@ -327,7 +331,13 @@ static OSEScreen *systemScreen = nil;
   [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
 
   XRRFreeScreenResources(screen_resources);
-  
+  if (background_pixmap != None && backgroundPixmapOwner == self) {
+    XFree(&background_pixmap);
+  }
+  if (background_gc != None) {
+    XFreeGC(xDisplay, background_gc);
+  }
+
   XCloseDisplay(xDisplay);
 
   [systemDisplays release];
@@ -530,6 +540,44 @@ static OSEScreen *systemScreen = nil;
   return success;
 }
 
+- (void)_setBackgroundXColor:(XColor)xColor
+                  forXScreen:(Screen *)xScreen
+{
+  Atom rootpmap_id = XInternAtom(xDisplay, "_XROOTPMAP_ID", False);
+
+  if (background_pixmap == None) {
+    // Try to get existing _XROOTPMAP_ID property
+    Atom type;
+    int format;
+    unsigned long length, after;
+    unsigned char *data = 0;
+    int result = XGetWindowProperty(xDisplay, xRootWindow, rootpmap_id, 0, 1, True, AnyPropertyType,
+                                    &type, &format, &length, &after, &data);
+
+    if (result == Success && data && type == XA_PIXMAP && format == 32 && length == 1) {
+      // Do not clear out - owner may still exist (Login.app)
+      // XKillClient(xDisplay, *((Pixmap *)data));
+      // XFree(data);
+      background_pixmap = *((Pixmap *)data);
+    } else {
+      background_pixmap = XCreatePixmap(xDisplay, xRootWindow, 1, 1, DefaultDepth(xDisplay, 0));
+      backgroundPixmapOwner = self;
+    }
+    background_gc_values.foreground = xColor.pixel;
+    background_gc = XCreateGC(xDisplay, xRootWindow, GCForeground, &background_gc_values);
+  }
+
+  // Set new _XROOTPMAP_ID property
+  if (background_pixmap != None) {
+    background_gc_values.foreground = xColor.pixel;
+    XChangeGC(xDisplay, background_gc, GCForeground, &background_gc_values);
+
+    XFillRectangle(xDisplay, background_pixmap, background_gc, 0, 0, 1, 1);
+    XChangeProperty(xDisplay, xRootWindow, rootpmap_id, XA_PIXMAP, 32, PropModeReplace,
+                    (unsigned char *)&background_pixmap, 1);
+  }
+}
+
 - (BOOL)setBackgroundColorRed:(CGFloat)redComponent
                         green:(CGFloat)greenComponent
                          blue:(CGFloat)blueComponent
@@ -558,10 +606,14 @@ static OSEScreen *systemScreen = nil;
             x_color_spec);
     return NO;
   }
-  
+
+  // Set background for non-compositor sessions
   XSetWindowBackground(xDisplay, xRootWindow, xColor.pixel);
   XClearWindow(xDisplay, xRootWindow);
+  // Set background for sessions with compositor
+  [self _setBackgroundXColor:xColor forXScreen:xScreen];
   XSync(xDisplay, False);
+
   return YES;
 }
 

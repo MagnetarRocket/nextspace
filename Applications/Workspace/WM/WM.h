@@ -241,8 +241,9 @@ extern struct wm_global_variables {
   /* Global Domains, for storing dictionaries */
   struct {
     /* Note: you must #include <defaults.h> if you want to use them */
-    struct WDDomain *wm;
-    struct WDDomain *window_attr;
+    struct WDDomain *wm_state;
+    struct WDDomain *wm_preferences;
+    struct WDDomain *window_attrs;
     struct WDDomain *root_menu;
   } domain;
 
@@ -377,7 +378,7 @@ extern CFStringRef WMDidCreateDesktopNotification;
 extern CFStringRef WMDidDestroyDesktopNotification;
 extern CFStringRef WMDidChangeDesktopNotification;
 extern CFStringRef WMDidChangeDesktopNameNotification;
-/* Appearance */
+/* Appearance and settings - WM.plist */
 extern CFStringRef WMDidChangeWindowAppearanceSettings;
 extern CFStringRef WMDidChangeIconAppearanceSettings;
 extern CFStringRef WMDidChangeIconTileSettings;
@@ -386,18 +387,22 @@ extern CFStringRef WMDidChangeMenuTitleAppearanceSettings;
 /* Other */
 // userInfo = { "XkbGroup" = CFNumber }
 extern CFStringRef WMDidChangeKeyboardLayoutNotification;
-extern CFStringRef WMDidChangeDockContentNotification;
 
 /* Notifications to communicate with applications. Manadatory prefixes in
    notification names are:
      - WMShould for notification from application to perform some action
      - WMDid to notify application about action completion
+   Every WMDid should complement WMShould notification.
 
-   Every WMDid should complement WMDid notification.
-
-   All notifications must contain in userInfo:
+   All WMShould* and WMDid* notifications must contain in userInfo:
      "WindowID" = CFNumber;
-     "ApplicationName" = CFString; */
+     "ApplicationName" = CFString;
+   Objective C definitions located in DesktopKit/NXTWorkspace.[hm].
+*/
+// WM.plist
+extern CFStringRef WMDidChangeAppearanceSettingsNotification;
+// WMState.plist
+extern CFStringRef WMDidChangeDockContentNotification;
 // Hide All
 extern CFStringRef WMShouldHideOthersNotification;
 extern CFStringRef WMDidHideOthersNotification;

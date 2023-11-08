@@ -36,6 +36,10 @@
 #include <unistd.h>
 
 #import <AppKit/AppKit.h>
+#include "AppKit/NSWorkspace.h"
+#include "Foundation/NSValue.h"
+#include "Foundation/NSBundle.h"
+#include "AppKit/NSImage.h"
 #import <Foundation/Foundation.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 
@@ -166,10 +170,6 @@ static NSString *_rootPath = @"/";
   if (_applications == nil) {
     [self findApplications];
   }
-  // [_workspaceCenter addObserver:self
-  //                      selector:@selector(_workspacePreferencesChanged:)
-  //                          name:GSWorkspacePreferencesChanged
-  //                        object:nil];
 
   /* icon association and caching */
   folderPathIconDict = [[NSMutableDictionary alloc] initWithCapacity:5];
@@ -322,7 +322,8 @@ static NSLock *raceLock = nil;
     NSString *wmName;
     NSBundle *appBundle;
     NSDictionary *appInfo;
-    NSString *iconPath;
+    NSString *iconName = nil;
+    NSString *iconPath = nil;
     NSString *launchPath;
 
     // Don't launch ourself and Login panel
@@ -356,7 +357,18 @@ static NSLock *raceLock = nil;
                        nil, nil, nil, appName, fullPath);
       return NO;
     }
-    iconPath = [appBundle pathForImageResource:[appInfo objectForKey:@"NSIcon"]];
+
+    if ((iconName = appInfo[@"NSIcon"]) != nil) {
+      iconPath = [appBundle pathForImageResource:[appInfo objectForKey:@"NSIcon"]];
+      if (iconPath == nil) {
+        NSLog(@"No icon for application found in app bundle!");
+      }
+    } else {
+      iconName = @"NXUnknownApplication";
+    }
+    if (iconPath == nil) {
+      iconPath = [[NSBundle mainBundle] pathForImageResource:iconName];
+    }
 
     [raceLock lock];
     wLaunchingAppIconCreate([[wmName stringByDeletingPathExtension] cString], "GNUstep",
@@ -380,35 +392,46 @@ static NSLock *raceLock = nil;
     NSBundle *appBundle;
     NSDictionary *appInfo;
     NSString *wmName;
+    NSString *wmClass;
     NSString *iconPath;
     NSString *launchPath;
+
+    launchPath = [self _locateApplicationBinary:appName];
+    if (launchPath == nil) {
+      return NO;
+    }
 
     appBundle = [self _bundleForApp:appName];
     if (appBundle) {
       appInfo = [appBundle infoDictionary];
       iconPath = [appBundle pathForImageResource:[appInfo objectForKey:@"NSIcon"]];
       wmName = [appInfo objectForKey:@"NSExecutable"];
-      launchPath = [self _locateApplicationBinary:appName];
-      if (launchPath == nil) {
+      wmClass = [wmName pathExtension];
+
+      if ([wmClass isEqualToString:@""] == NO) {
+        wmName = [wmName stringByDeletingPathExtension];
+      } else {
+        wmClass = @"GNUstep";
+      }
+
+      [raceLock lock];
+      wLaunchingAppIconCreate([wmName cString], [wmClass cString], [launchPath cString], point.x,
+                              point.y, [iconPath cString]);
+      [raceLock unlock];
+
+      if (![self openFile:fullPath withApplication:appName andDeactivate:YES]) {
+        NXTRunAlertPanel(_(@"Workspace"), _(@"Failed to start application \"%@\" for file \"%@\""),
+                         nil, nil, nil, appName, [fullPath lastPathComponent]);
         return NO;
       }
-      [raceLock lock];
-      wLaunchingAppIconCreate([[wmName stringByDeletingPathExtension] cString], "GNUstep",
-                              [launchPath cString], point.x, point.y, [iconPath cString]);
-      [raceLock unlock];
+      // If multiple files are opened at once we need to wait for app to start.
+      // Otherwise two copies of one application become alive.
+      while (([wmClass isEqualToString:@"GNUstep"] != NO) &&
+             ([self _connectApplication:appName] == nil)) {
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+      }
+      return YES;
     }
-
-    if (![self openFile:fullPath withApplication:appName andDeactivate:YES]) {
-      NXTRunAlertPanel(_(@"Workspace"), _(@"Failed to start application \"%@\" for file \"%@\""),
-                       nil, nil, nil, appName, [fullPath lastPathComponent]);
-      return NO;
-    }
-    // If multiple files are opened at once we need to wait for app to start.
-    // Otherwise two copies of one application become alive.
-    while ([self _connectApplication:appName] == nil) {
-      [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
-    }
-    return YES;
   }
 
   return NO;
@@ -417,17 +440,52 @@ static NSLock *raceLock = nil;
 //-------------------------------------------------------------------------------------------------
 //--- Manipulating Files
 //-------------------------------------------------------------------------------------------------
-// FIXME: TODO
-// - (BOOL)performFileOperation:(NSString*)operation
-//                       source:(NSString*)source
-//                  destination:(NSString*)destination
-//                        files:(NSArray*)files
-//                          tag:(int*)tag
-// {
-//   // FiXME
+// Operation types supported by ProcessManager: Copy, Duplicate, Move, Link, Delete, Recycle
+- (BOOL)performFileOperation:(NSString*)operation
+                      source:(NSString*)source
+                 destination:(NSString*)destination
+                       files:(NSArray*)files
+                         tag:(int*)tag
+{
+  OperationType opType = 0;
 
-//   return NO;
-// }
+  if ([operation isEqualToString:NSWorkspaceCopyOperation]) {
+    opType = CopyOperation;
+  } else if ([operation isEqualToString:NSWorkspaceDuplicateOperation]) {
+    opType = DuplicateOperation;
+  } else if ([operation isEqualToString:NSWorkspaceMoveOperation]) {
+    opType = MoveOperation;
+  } else if ([operation isEqualToString:NSWorkspaceLinkOperation]) {
+    opType = LinkOperation;
+  } else if ([operation isEqualToString:NSWorkspaceDestroyOperation]) {
+    opType = DeleteOperation;
+  } else if ([operation isEqualToString:NSWorkspaceRecycleOperation]) {
+    opType = RecycleOperation;
+  } /*else if ([operation isEqualToString:NSWorkspaceCompressOperation]) {
+    opType = ;
+  } else if ([operation isEqualToString:NSWorkspaceDecompressOperation]) {
+    opType = ;
+  } else if ([operation isEqualToString:NSWorkspaceEncryptOperation]) {
+    opType = ;
+  } else if ([operation isEqualToString:NSWorkspaceDecryptOperation]) {
+    opType = ;
+  }*/
+
+  if (opType) {
+    id operation = [procManager startOperationWithType:opType
+                                                source:source
+                                                target:destination
+                                                 files:files];
+    if (operation) {
+      NSNumber *opHash = [NSNumber numberWithUnsignedInteger:[operation hash]];
+      *tag = [opHash intValue];
+      return YES;
+    } else {
+      return NO;
+    }
+  }
+  return NO;
+}
 
 // From OpenUp:
 // [[NSWorkspace sharedWorkspace] selectFile:archivePath
@@ -734,18 +792,18 @@ static NSLock *raceLock = nil;
 //-------------------------------------------------------------------------------------------------
 //--- Tracking Changes to the File System
 //-------------------------------------------------------------------------------------------------
-// - (BOOL)fileSystemChanged
-// {
-//   BOOL flag = _fileSystemChanged;
+- (BOOL)fileSystemChanged
+{
+  BOOL flag = _fileSystemChanged;
 
-//   _fileSystemChanged = NO;
-//   return flag;
-// }
+  _fileSystemChanged = NO;
+  return flag;
+}
 
-// - (void)noteFileSystemChanged
-// {
-//   _fileSystemChanged = YES;
-// }
+- (void)noteFileSystemChanged
+{
+  _fileSystemChanged = YES;
+}
 
 //-------------------------------------------------------------------------------------------------
 //--- Updating Registered Services and File Types
@@ -842,7 +900,7 @@ static NSLock *raceLock = nil;
 
 - (NSNotificationCenter *)notificationCenter
 {
-  return _workspaceCenter;
+  return _windowManagerCenter;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1205,31 +1263,25 @@ static NSLock *raceLock = nil;
 //    * TODO  add a user info to aNotification, which includes a bitmask
 //    *       denoting the updated preference files.
 //    */
-//   NSFileManager		*mgr = [NSFileManager defaultManager];
-//   NSData		*data;
-//   NSDictionary		*dict;
+//   NSFileManager *mgr = [NSFileManager defaultManager];
+//   NSData *data;
+//   NSDictionary *dict;
 
-//   if ([mgr isReadableFileAtPath: extPrefPath] == YES)
-//     {
-//       data = [NSData dataWithContentsOfFile: extPrefPath];
-//       if (data)
-// 	{
-// 	  dict = [NSDeserializer deserializePropertyListFromData: data
-// 					       mutableContainers: NO];
-// 	  ASSIGN(extPreferences, dict);
-// 	}
+//   if ([mgr isReadableFileAtPath:extPrefPath] == YES) {
+//     data = [NSData dataWithContentsOfFile:extPrefPath];
+//     if (data) {
+//       dict = [NSDeserializer deserializePropertyListFromData:data mutableContainers:NO];
+//       ASSIGN(extPreferences, dict);
 //     }
+//   }
 
-//   if ([mgr isReadableFileAtPath: appListPath] == YES)
-//     {
-//       data = [NSData dataWithContentsOfFile: appListPath];
-//       if (data)
-// 	{
-// 	  dict = [NSDeserializer deserializePropertyListFromData: data
-// 					       mutableContainers: NO];
-// 	  ASSIGN(applications, dict);
-// 	}
+//   if ([mgr isReadableFileAtPath:appListPath] == YES) {
+//     data = [NSData dataWithContentsOfFile:appListPath];
+//     if (data) {
+//       dict = [NSDeserializer deserializePropertyListFromData:data mutableContainers:NO];
+//       ASSIGN(applications, dict);
 //     }
+//   }
 //   /*
 //    *	Invalidate the cache of icons for file extensions.
 //    */
@@ -1292,7 +1344,7 @@ static NSLock *raceLock = nil;
     @"NSApplicationPath" : appName
   };
   NSLog(@"Application UserInfo: %@", userinfo);
-  [_workspaceCenter postNotificationName:NSWorkspaceWillLaunchApplicationNotification
+  [_windowManagerCenter postNotificationName:NSWorkspaceWillLaunchApplicationNotification
                                   object:self
                                 userInfo:userinfo];
   task = [NSTask launchedTaskWithLaunchPath:path arguments:args];
@@ -1328,7 +1380,7 @@ static NSLock *raceLock = nil;
   if (appicon) {
     wLaunchingAppIconDestroy(wDefaultScreen(), appicon);
   }
-  [_workspaceCenter
+  [_windowManagerCenter
       postNotificationName:NSWorkspaceDidTerminateApplicationNotification
                     object:self
                   userInfo:@{@"NSApplicationName" : [[task launchPath] lastPathComponent]}];
@@ -1354,9 +1406,7 @@ static NSLock *raceLock = nil;
     if (host == nil) {
       host = @"";
     } else {
-      NSHost *h;
-
-      h = [NSHost hostWithName:host];
+      NSHost *h = [NSHost hostWithName:host];
       if ([h isEqual:[NSHost currentHost]] == YES) {
         host = @"";
       }
@@ -1658,10 +1708,10 @@ static NSLock *raceLock = nil;
   _extPreferences = map;
   data = [NSSerializer serializePropertyList:_extPreferences];
   if ([data writeToFile:_extPrefPath atomically:YES]) {
-    // [_workspaceCenter postNotificationName:GSWorkspacePreferencesChanged
+    // [NSNotificationCenter defaultCenter] postNotificationName:GSWorkspacePreferencesChanged
     //                                 object:self];
   } else {
-    NSLog(@"Update %@ of failed", _extPrefPath);
+    NSDebugLLog(@"Workspace", @"Update %@ of failed", _extPrefPath);
   }
 }
 
@@ -1697,10 +1747,10 @@ static NSLock *raceLock = nil;
   _extPreferences = map;
   data = [NSSerializer serializePropertyList:_extPreferences];
   if ([data writeToFile:_extPrefPath atomically:YES]) {
-    // [_workspaceCenter postNotificationName:GSWorkspacePreferencesChanged
+    // [NSNotificationCenter defaultCenter] postNotificationName:GSWorkspacePreferencesChanged
     //                                 object:self];
   } else {
-    NSLog(@"Update %@ of failed", _extPrefPath);
+    NSDebugLLog(@"Workspace", @"Update %@ of failed", _extPrefPath);
   }
 }
 

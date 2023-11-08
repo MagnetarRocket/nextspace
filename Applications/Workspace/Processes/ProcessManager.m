@@ -22,8 +22,9 @@
 #include <sys/types.h>
 #include <signal.h>
 
-#import <DesktopKit/NXTAlert.h>
 #import <Foundation/NSString.h>
+
+#import <DesktopKit/NXTAlert.h>
 #import <DesktopKit/NXTFileManager.h>
 
 #include "CoreFoundationBridge.h"
@@ -249,7 +250,7 @@ static BOOL _workspaceQuitting = NO;
 
 - (void)applicationDidBecomeActive:(NSNotification *)notif
 {
-  WMLogWarning("ApplicationDidBecomeActive: %@", convertNStoCFDictionary([notif userInfo]));
+  // WMLogWarning("ApplicationDidBecomeActive: %@", convertNStoCFDictionary([notif userInfo]));
   _activeApplication = [[notif userInfo] copy];
 }
 

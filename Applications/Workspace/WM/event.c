@@ -318,7 +318,7 @@ void WMRunLoop_V0()
 {
   XEvent event;
 
-  WMLogError("WMRunLoop0: handling events while run loop is warming up.");
+  WMLogError("WMRunLoop_V0: handling events while run loop is warming up.");
   while (wm_runloop == NULL) {
     WMNextEvent(dpy, &event);
     WMHandleEvent(&event);
@@ -328,8 +328,7 @@ void WMRunLoop_V0()
 #ifdef HAVE_INOTIFY
   /* Track some defaults files for changes */
   w_global.inotify.fd_event_queue = -1;
-  wDefaultsShouldTrackChanges(w_global.domain.wm, true);
-  wDefaultsShouldTrackChanges(w_global.domain.window_attr, true);
+  wDefaultsShouldTrackChanges(w_global.domain.window_attrs, true);
 #else
   /* Setup defaults files polling */
   if (!wPreferences.flags.noupdates) {
@@ -344,7 +343,7 @@ void WMRunLoop_V1()
   CFFileDescriptorRef xfd;
   CFRunLoopSourceRef xfd_source;
 
-  WMLogError("V1: Entering WM runloop with X connection: %i", ConnectionNumber(dpy));
+  WMLogError("WMRunLoop_V1: Entering WM runloop with X connection: %i", ConnectionNumber(dpy));
 
   // X connection file descriptor
   xfd = CFFileDescriptorCreate(kCFAllocatorDefault, ConnectionNumber(dpy), true,
@@ -356,7 +355,7 @@ void WMRunLoop_V1()
   CFRelease(xfd_source);
   CFRelease(xfd);
 
-  WMLogError("V1: Going into CFRunLoop...");
+  WMLogError("WMRunLoop_V1: Going into CFRunLoop...");
 
   wm_runloop = run_loop;
   CFRunLoopRun();

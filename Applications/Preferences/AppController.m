@@ -94,6 +94,8 @@
     if ([screen savedBackgroundColorRed:&red green:&green blue:&blue] == YES) {
       [screen setBackgroundColorRed:red green:green blue:blue];
     }
+  } else {
+    [self showPreferencesWindow];
   }
 }
 
@@ -111,6 +113,7 @@
 
 - (void)applicationDidBecomeActive:(NSNotification*)aNotification
 {
+  [self showPreferencesWindow];
 }
 
 - (BOOL)application:(NSApplication *)application openFile:(NSString *)fileName

@@ -1089,7 +1089,9 @@ static int getWindowLayer(WWindow *wwin)
   } else if (wwin->type == net_wm_window_type_menu) {
     layer = NSSubmenuWindowLevel;
   } else if (wwin->type == net_wm_window_type_utility) {
+    layer = NSFloatingWindowLevel;
   } else if (wwin->type == net_wm_window_type_splash) {
+    layer = NSPopUpMenuWindowLevel;
   } else if (wwin->type == net_wm_window_type_dialog) {
     if (wwin->transient_for) {
       WWindow *parent = wWindowFor(wwin->transient_for);
@@ -1107,7 +1109,9 @@ static int getWindowLayer(WWindow *wwin)
   } else if (wwin->type == net_wm_window_type_combo) {
     layer = NSSubmenuWindowLevel;
   } else if (wwin->type == net_wm_window_type_dnd) {
+    layer = NSPopUpMenuWindowLevel;
   } else if (wwin->type == net_wm_window_type_normal) {
+    layer = NSNormalWindowLevel;
   }
 
   if (wwin->client_flags.sunken && NSSunkenWindowLevel < layer)
@@ -1280,6 +1284,7 @@ static Bool _getAttributesForWindowType(Atom type, WWindowAttributes *window_att
     window_attrs->no_miniaturizable = 1;
     window_attrs->no_resizebar = 1;
     window_attrs->no_shadeable = 1;
+    window_attrs->omnipresent = 1;
     window_attrs->skip_window_list = 1;
     window_attrs->skip_switchpanel = 1;
     window_attrs->dont_move_off = 1;

@@ -21,7 +21,6 @@
 #import <errno.h>
 #import <string.h>
 #import <sys/utsname.h>
-#include "Foundation/NSNotification.h"
 
 #import <GNUstepGUI/GSDisplayServer.h>
 #import <X11/Xlib.h>
@@ -30,7 +29,8 @@
 #include <core/string_utils.h>
 
 #import <DesktopKit/DesktopKit.h>
-#import <DesktopKit/NXTDefaults.h>
+#import <DesktopKit/NXTHelpPanel.h>
+
 #import <SystemKit/OSEDisplay.h>
 #import <SystemKit/OSEFileSystemMonitor.h>
 #import <SystemKit/OSEKeyboard.h>
@@ -59,9 +59,6 @@
 #import <Operations/Mounter.h>
 #import <Processes/ProcessManager.h>
 #import <Processes/Processes.h>
-
-#import <DesktopKit/NXTAlert.h>
-#import <DesktopKit/NXTHelpPanel.h>
 
 static NSString *WorkspaceVersion = @"0.8";
 
@@ -390,7 +387,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   // We don't need to handle events on quit.
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   // Not need to remove observers explicitely for NSWorkspaceCenter.
-  [_workspaceCenter release];
+  [_windowManagerCenter release];
 
   // Close and save file viewers, close panels.
   [self _saveWindowsStateAndClose];
@@ -626,14 +623,14 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   [self updateKeyboardBadge:nil];
 
   // Workspace Notification Central
-  _workspaceCenter = [WMNotificationCenter defaultCenter];
+  _windowManagerCenter = [WMNotificationCenter defaultCenter];
 
   // Window Manager events
-  [_workspaceCenter addObserver:self
+  [_windowManagerCenter addObserver:self
                        selector:@selector(updateWorkspaceBadge:)
                            name:CF_NOTIFICATION(WMDidChangeDesktopNotification)
                          object:nil];
-  [_workspaceCenter addObserver:self
+  [_windowManagerCenter addObserver:self
                        selector:@selector(updateKeyboardBadge:)
                            name:CF_NOTIFICATION(WMDidChangeKeyboardLayoutNotification)
                          object:nil];
@@ -750,6 +747,8 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 // Workspace quit.
 // Log Out and Power Off terminate quitting when some application won't stop,
 // some removable media won't unmount/eject (optional: think).
+#define LogOut NSAlertDefaultReturn
+#define PowerOff NSAlertAlternateReturn
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
 {
   NSApplicationTerminateReply terminateReply;
@@ -758,7 +757,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
   switch (NXTRunAlertPanel(_(@"Log Out"), _(@"Do you really want to log out?"), _(@"Log out"),
                            _(@"Power off"), _(@"Cancel"))) {
-    case NSAlertDefaultReturn:  // Log Out
+    case LogOut:
     {
       [[NSApp mainMenu] close];
       _isQuitting = [procManager terminateAllBGOperations];
@@ -781,7 +780,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
         ws_quit_code = WSLogoutOnQuit;
       }
     } break;
-    case NSAlertAlternateReturn:  // Power off
+    case PowerOff:
     {
       [[NSApp mainMenu] close];
       _isQuitting = [procManager terminateAllBGOperations];
@@ -800,6 +799,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
         [self _finishTerminateProcess];
         terminateReply = NSTerminateNow;
         ws_quit_code = WSPowerOffOnQuit;
+
       }
     } break;
     default:
@@ -1039,8 +1039,20 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 // Application menu
 //============================================================================
 
+- (void)hideOtherApplications:(id)sender
+{
+  Window xWindow = (Window)[GSCurrentServer() windowDevice:[[NSApp keyWindow] windowNumber]];
+  NSDictionary *info =
+      @{@"WindowID" : [NSNumber numberWithUnsignedLong:xWindow], @"ApplicationName" : @"Workspace"};
+
+  [[NSDistributedNotificationCenter defaultCenter]
+      postNotificationName:CF_NOTIFICATION(WMShouldHideOthersNotification)
+                    object:@"GSWorkspaceNotification"
+                  userInfo:info];
+}
+
 // Info
-- (void)showInfoPanel:sender
+- (void)showInfoPanel:(id)sender
 {
   if (infoPanel == nil) {
     [NSBundle loadNibNamed:@"InfoPanel" owner:self];
@@ -1051,7 +1063,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   [infoPanel makeKeyAndOrderFront:nil];
 }
 
-- (void)showLegalPanel:sender
+- (void)showLegalPanel:(id)sender
 {
   if (legalPanel == nil) {
     NSScrollView *sv;
@@ -1070,7 +1082,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 // TODO
-- (void)saveLegalToFile:sender
+- (void)saveLegalToFile:(id)sender
 {
   NSSavePanel *sp = [NXTSavePanel savePanel];
 
@@ -1146,7 +1158,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 // Tools -> Inspector
-- (void)showAttributesInspector:sender
+- (void)showAttributesInspector:(id)sender
 {
   if (!inspector) {
     [self _loadInpectors];
@@ -1154,7 +1166,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   [inspector showAttributesInspector:self];
 }
 
-- (void)showContentsInspector:sender
+- (void)showContentsInspector:(id)sender
 {
   if (!inspector) {
     [self _loadInpectors];
@@ -1162,7 +1174,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   [inspector showContentsInspector:self];
 }
 
-- (void)showToolsInspector:sender
+- (void)showToolsInspector:(id)sender
 {
   if (!inspector) {
     [self _loadInpectors];
@@ -1170,7 +1182,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   [inspector showToolsInspector:self];
 }
 
-- (void)showPermissionsInspector:sender
+- (void)showPermissionsInspector:(id)sender
 {
   if (!inspector) {
     [self _loadInpectors];
@@ -1209,7 +1221,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   [console activate];
 }
 
-- (void)showLauncher:sender
+- (void)showLauncher:(id)sender
 {
   if (launcher == nil) {
     launcher = [[Launcher alloc] init];

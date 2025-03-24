@@ -22,6 +22,7 @@ Unlike other 'real' and 'serious' projects, I have not yet defined a target audi
 * Porting to other Linux distributions and operating systems. For now, I want a fast, accurate, and stable version for RedHat-based Linux distributions. Currently these are CentOS 7, CentOS Stream and Fedora. However, NEXTSPACE was designed to be portable and thus this point may be changed in future.
 * GNOME, KDE, macOS rival in terms of visual effects, modern design principles, look and feel.
 * Implementing a macOS-like desktop paradigm. There is another good place for this -- see [Étoilé](http://etoileos.com).
+* Creating a OpenStep 4.0 pr1-like desktop.
 
 ## Installing
 Installation is based off CentOS 7's minimal install, you can find [full directions in the installation guide](https://github.com/trunkmaster/nextspace/wiki/Install-Guide). 

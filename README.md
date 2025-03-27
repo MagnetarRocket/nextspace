@@ -23,7 +23,7 @@ Unlike other 'real' and 'serious' projects, I have not yet defined a target audi
 ## Not planned
 * Porting to other Linux distributions and operating systems. For now, I want a fast, accurate, and stable version for RedHat-based Linux distributions. Currently these are Fedora, CentOS Stream 9, Rocky Linux 9 and Alma Linux 9. However, NEXTSPACE was designed to be portable and thus this point may be changed in future.
 * GNOME, KDE, macOS rival in terms of visual effects, modern design principles, look and feel.
-* Implementing a macOS-like desktop paradigm. There is another good place for this -- see [Étoilé](http://etoileos.com).
+* Implementing a macOS-like or a OpenStep 4.0 pr1-like desktop paradigm. There is another good place for this -- see [Étoilé](http://etoileos.com) for macOS-alike & [GnuStep GWorkspace](https://www.gnustep.org/experience/GWorkspace.html#Documentation) for pr1-alike.
 
 ## Installing
 There are several methods of NEXTSPACE installation:

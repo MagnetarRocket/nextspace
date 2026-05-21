@@ -2198,3 +2198,24 @@ void wMenuRestoreState(WScreen *scr)
 
   restoreMenu(scr, menu);
 }
+
+WMenuItem *wMenuItemWithTitle(WMenu *menu, char *title)
+{
+  WMenuItem *item = NULL;
+
+  for (short i = 0; i < menu->items_count; i++) {
+    item = menu->items[i];
+    if (strcmp(item->text, title) == 0) {
+      break;
+    }
+    if (item->submenu_index >= 0) {
+      item = wMenuItemWithTitle(menu->submenus[item->submenu_index], title);
+      if (item) {
+        break;
+      }
+    }
+    item = NULL;
+  }
+
+  return item;
+}

@@ -35,7 +35,5 @@ void wApplicationMenuShow(WMenu *menu);
 void wApplicationMenuSaveState(WMenu *main_menu, CFMutableArrayRef menus_state);
 void wApplicationMenuRestoreFromState(WMenu *menu, CFArrayRef state);
 
-WMenuItem *wMenuItemWithTitle(WMenu *menu, char *title);
-
 void wApplicationMenuSetKeyGrabs(WWindow *wwin);
 Bool wApplicationMenuHandleKeyPress(struct WWindow *focused_window, XEvent *event);

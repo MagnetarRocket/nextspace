@@ -83,15 +83,15 @@ typedef struct WMenu {
   void (*on_destroy)(struct WMenu *menu);
 
   struct {
-    unsigned int titled : 1;
+    unsigned int titled   : 1;
     unsigned int realized : 1; /* whether the window was configured */
     unsigned int restored : 1; /* whether the menu was restored from saved state */
     unsigned int app_menu : 1; /* this is a application or root menu */
-    unsigned int mapped : 1;   /* if menu is already mapped on screen*/
-    unsigned int hidden : 1;   /* if menu was hidden on app deactivation */
-    unsigned int tornoff : 1;  /* if the close button is visible (menu was torn off) */
-    unsigned int lowered : 1;
-    unsigned int brother : 1;  /* if this is a copy of the menu */
+    unsigned int mapped   : 1; /* if menu is already mapped on screen*/
+    unsigned int hidden   : 1; /* if menu was hidden on app deactivation */
+    unsigned int tornoff  : 1; /* if the close button is visible (menu was torn off) */
+    unsigned int lowered  : 1;
+    unsigned int brother  : 1; /* if this is a copy of the menu */
   } flags;
 } WMenu;
 
@@ -127,5 +127,7 @@ void wMenuSlideIfNeeded(WMenu *menu);
 WMenu *wMenuUnderPointer(WScreen *screen);
 void wMenuSaveState(WScreen *scr);
 void wMenuRestoreState(WScreen *scr);
+
+WMenuItem *wMenuItemWithTitle(WMenu *menu, char *title);
 
 #endif /* __WORKSPACE_WM_MENU__ */

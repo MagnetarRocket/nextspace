@@ -785,18 +785,6 @@ void wApplicationMenuShow(WMenu *menu)
   }
 }
 
-WMenuItem *wMenuItemWithTitle(WMenu *menu, char *title)
-{
-  WMenuItem **items = menu->items;
-
-  for (int i = 0; i < menu->items_count; i++) {
-    if (!strcmp(items[i]->text, title)) {
-      return items[i];
-    }
-  }
-  return NULL;
-}
-
 // Menu state
 //--------------------------------------------------------------------------------------------------
 

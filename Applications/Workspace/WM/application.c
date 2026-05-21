@@ -605,6 +605,14 @@ void wApplicationActivate(WApplication *wapp)
           kCFAllocatorDefault, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     }
     wapp->last_focused = scr->focused_window;
+
+    if (wapp->app_menu) {
+      WMenuItem *item;
+      item = wMenuItemWithTitle(wapp->app_menu, "Move Window To");
+      if (item) {
+        wMenuItemSetEnabled(item->menu, item, 1);
+      }
+    }
   }
 
   if (scr->notificationCenter) {
@@ -620,6 +628,12 @@ void wApplicationDeactivate(WApplication *wapp)
   if (wapp->app_icon) {
     wIconSetHighlited(wapp->app_icon->icon, False);
     wAppIconPaint(wapp->app_icon);
+  }
+  if (wapp->app_menu) {
+    WMenuItem *item = wMenuItemWithTitle(wapp->app_menu, "Move Window To");
+    if (item) {
+      wMenuItemSetEnabled(item->menu, item, 0);
+    }
   }
   if (wapp->app_menu && wapp->app_menu->flags.mapped) {
     wApplicationMenuHide(wapp->app_menu);

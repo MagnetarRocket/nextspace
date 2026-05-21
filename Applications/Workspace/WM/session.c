@@ -442,7 +442,7 @@ void wSessionRestoreState(WScreen *scr)
   WDock *dock;
   WAppIcon *btn = NULL;
   int j, n, found;
-  char *tmp;
+  char *tmp = NULL;
 
   if (!scr->session_state)
     return;
@@ -540,7 +540,7 @@ void wSessionRestoreLastDesktop(WScreen *scr)
 {
   CFStringRef wks;
   int w;
-  const char *value;
+  const char *value = NULL;
 
   if (!scr->session_state)
     return;

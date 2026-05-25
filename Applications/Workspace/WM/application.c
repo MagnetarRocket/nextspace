@@ -608,7 +608,7 @@ void wApplicationActivate(WApplication *wapp)
 
     if (wapp->app_menu) {
       WMenuItem *item;
-      item = wMenuItemWithTitle(wapp->app_menu, "Move Window To");
+      item = wMenuItemWithTitle(wapp->app_menu, "Windows");
       if (item) {
         wMenuItemSetEnabled(item->menu, item, 1);
       }
@@ -630,7 +630,8 @@ void wApplicationDeactivate(WApplication *wapp)
     wAppIconPaint(wapp->app_icon);
   }
   if (wapp->app_menu) {
-    WMenuItem *item = wMenuItemWithTitle(wapp->app_menu, "Move Window To");
+    WMenuItem *item;
+    item = wMenuItemWithTitle(wapp->app_menu, "Windows");
     if (item) {
       wMenuItemSetEnabled(item->menu, item, 0);
     }

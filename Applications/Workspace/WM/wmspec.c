@@ -683,11 +683,13 @@ static RImage *_makeRImageFromARGBData(unsigned long *data)
   height = data[1];
   size = width * height;
 
-  if (size == 0)
+  if (size == 0) {
     return NULL;
-
+  }
   image = RCreateImage(width, height, True);
-
+  if (!image) {
+    return NULL;
+  }
   for (imgdata = image->data, i = 2; i < size + 2; i++, imgdata += 4) {
     pixel = data[i];
     imgdata[3] = (pixel >> 24) & 0xff; /* A */

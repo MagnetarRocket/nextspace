@@ -25,8 +25,8 @@
 #include <dispatch/dispatch.h>
 
 #import <AppKit/AppKit.h>
-#import <DesktopKit/NXTDefaults.h>
-#import <DesktopKit/NXTFileManager.h>
+#import <SystemKit/OSEDefaults.h>
+#import <SystemKit/OSEFileManager.h>
 #import <DesktopKit/Utilities.h>
 
 #import <Workspace.h>
@@ -267,7 +267,7 @@
 
 - (void)dealloc
 {
-  NSLog(@"[BrowserViewer] dealloc");
+  NSDebugLLog(@"Memory", @"[BrowserViewer] dealloc");
   [[NSNotificationCenter defaultCenter] removeObserver:self];
     
   TEST_RELEASE(currentPath);
@@ -287,7 +287,7 @@
   [super init];
 
   if (![NSBundle loadNibNamed:@"BrowserViewer" owner:self]) {
-    NSLog(@"Error: failed to load BrowserViewer interface file!");
+    NSDebugLLog(@"BrowserViewer", @"Error: failed to load BrowserViewer interface file!");
     [self autorelease];
     return nil;
   }
@@ -362,7 +362,7 @@
 
 - (CGFloat)columnWidth
 {
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
 
   columnWidth = [df floatForKey:BrowserViewerColumnWidth];
   if (columnWidth <= BROWSER_MIN_COLUMN_WIDTH) {

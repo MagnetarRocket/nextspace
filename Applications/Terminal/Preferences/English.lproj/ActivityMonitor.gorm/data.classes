@@ -1,0 +1,31 @@
+{
+    "## Comment" = "Do NOT change this file, Gorm maintains it";
+    ActivityPrefs = {
+	Actions = (
+	    "addCleanCommand:",
+	    "removeCleanCommand:",
+	    "setActivityMonitor:",
+	    "setBackgroundProcesses:"
+	);
+	Outlets = (
+	    window,
+	    view,
+	    activityMonitorButton,
+	    addButton,
+	    cleanCommandField,
+	    cleanCommandsList,
+	    backgroundProcessesButton,
+	    removeButton
+	);
+	Super = NSObject;
+    };
+    FirstResponder = {
+	Actions = (
+	    "addCleanCommand:",
+	    "removeCleanCommand:",
+	    "setActivityMonitor:",
+	    "setBackgroundProcesses:"
+	);
+	Super = NSObject;
+    };
+}

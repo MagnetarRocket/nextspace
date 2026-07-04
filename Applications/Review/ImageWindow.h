@@ -13,16 +13,22 @@
 
 @interface ImageWindow : NSObject <ImageShowing>
 {
-  id            delegate;
-  NSWindow      *window;
-  NSString      *imagePath;
-  NSDictionary  *attr;
-  NSSize        imageSize;
-  NSImageRep    *rep;
-  int           reps;
+  id delegate;
+  NSString *imagePath;
+  NSSize imageSize;
+  NSArray *representations;
+  NSUInteger visibleRepIndex;
+  NSImageView *imageView;
+  NSDictionary *attr;
   NSPopUpButton *scalePopup;
-  NSBox         *box;
+  NSBox *box;
+  NSScrollView *_scrollView;
+  NSImage *_displayImage;
 }
+
+@property (readonly) NSWindow *window;
+@property (readonly) NSImage *image;
+@property (readonly) NSImageRep *visibleRep;
 
 - (id)initWithContentsOfFile:(NSString *)path;
 
@@ -31,20 +37,42 @@
 
 - (void)windowWillClose:(NSNotification *)notif;
 - (void)windowDidBecomeKey:(NSNotification *)aNotification;
+- (void)windowDidResize:(NSNotification *)aNotification;
 
 - (NSString *)path;
 - (NSString *)imagePath;
 - (NSString *)imageName;
+
 - (NSString *)imageType;
-- (NSString *)imageSize;
+- (NSString *)imageFileSize;
 - (NSString *)imageFileModificationDate;
 - (NSString *)imageFilePermissions;
 - (NSString *)imageFileOwner;
-- (NSString *)imageResolution;
-- (NSString *)bitsPerSample;
+
+- (NSString *)imageWidth;
+- (NSString *)imageHeight;
+- (NSString *)imageBitsPerPixel;
+- (NSString *)imageBitsPerSample;
+- (NSString *)imageNumberOfPlanes;
+- (NSString *)imageBytesPerPlane;
+- (NSString *)imageBytesPerRow;
+
 - (NSString *)colorSpaceName;
 - (NSString *)hasAlpha;
-- (NSString *)imageReps;
+
+// TIFF and JPEG
+- (NSString *)compressionType;
+- (NSString *)compressionFactor;
+// GIF
+- (NSString *)imageFrameCount;
+- (NSString *)imageCurrentFrame;
+//
+- (NSString *)imageGamma;
+- (NSString *)imageProgressive;
+- (void)zoomIn;
+- (void)zoomOut;
+
+- (void)scaleImageFromPopup:(id)sender;
 
 @end
 

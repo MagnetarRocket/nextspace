@@ -20,7 +20,7 @@
 //
 
 #import "DockPrefs.h"
-#import <DesktopKit/NXTDefaults.h>
+#import <SystemKit/OSEDefaults.h>
 #import "Processes/ProcessManager.h"
 #import <Workspace+WM.h>
 #import <WMNotificationCenter.h>
@@ -62,7 +62,7 @@ NSImage *WMDockAppImage(int position)
   NSImage *icon = nil;
 
   if (btn) {
-    // NSLog(@"W+W: icon image file: %s", btn->icon->file);
+    // NSDebugLLog(@"Preferences", @"W+W: icon image file: %s", btn->icon->file);
     if (btn->icon->file) {  // Docked and not running application
       iconPath = [NSString stringWithCString:btn->icon->file];
       icon = [[NSImage alloc] initWithContentsOfFile:iconPath];
@@ -105,7 +105,7 @@ void WMSetDockAppImage(NSString *path, int position, BOOL save)
   }
   btn->icon->file = wstrdup([path cString]);
 
-  rimage = RLoadImage(wDefaultScreen()->rcontext, btn->icon->file, 0);
+  rimage = WSCreateRasterImage(btn->icon->file, wDefaultScreen());
   if (!rimage) {
     return;
   }

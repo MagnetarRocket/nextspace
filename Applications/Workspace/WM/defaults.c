@@ -420,8 +420,6 @@ WDefaultEntry optionList[] = {
     {"Attraction", "NO", NULL, &wPreferences.attract, getBool, NULL, NULL, NULL},
     {"DisableBlinking", "NO", NULL, &wPreferences.dont_blink, getBool, NULL, NULL, NULL},
     {"SingleClickLaunch", "NO", NULL, &wPreferences.single_click, getBool, NULL, NULL, NULL},
-    {"StrictWindozeCycle", "YES", NULL, &wPreferences.strict_windoze_cycle, getBool, NULL, NULL,
-     NULL},
     {"SwitchPanelOnlyOpen", "NO", NULL, &wPreferences.panel_only_open, getBool, NULL, NULL, NULL},
     {"MiniPreviewSize", "128", NULL, &wPreferences.minipreview_size, getInt, NULL, NULL, NULL},
     {"IgnoreGtkHints", "NO", NULL, &wPreferences.ignore_gtk_decoration_hints, getBool, NULL, NULL,
@@ -586,18 +584,16 @@ WDefaultEntry optionList[] = {
     /* {"MinimizeAllKey", "\"Command+M\"", (void *)WKBD_MINIMIZEALL, NULL, getKeybind, setKeyGrab,
        NULL, NULL}, */
     /* Focus switch */
-    /* {"RaiseKey", "\"Command+Up\"", (void *)WKBD_RAISE, NULL, getKeybind, setKeyGrab, NULL, NULL},
-     */
-    /* {"LowerKey", "\"Command+Down\"", (void *)WKBD_LOWER, NULL, getKeybind, setKeyGrab, NULL,
-       NULL}, */
-    {"FocusNextKey", "\"Command+Tab\"", (void *)WKBD_FOCUSNEXT, NULL, getKeybind, setKeyGrab, NULL,
+    {"RaiseKey", "\"Command+Up\"", (void *)WKBD_RAISE, NULL, getKeybind, setKeyGrab, NULL, NULL},
+    {"LowerKey", "\"Command+Down\"", (void *)WKBD_LOWER, NULL, getKeybind, setKeyGrab, NULL, NULL},
+    {"FocusNextKey", "\"Command+grave\"", (void *)WKBD_NEXT_WIN, NULL, getKeybind, setKeyGrab, NULL,
      NULL},
-    {"FocusPrevKey", "\"Command+Shift+Tab\"", (void *)WKBD_FOCUSPREV, NULL, getKeybind, setKeyGrab,
+    {"FocusPrevKey", "\"Command+Shift+grave\"", (void *)WKBD_PREV_WIN, NULL, getKeybind, setKeyGrab,
      NULL, NULL},
-    {"GroupNextKey", "\"Command+grave\"", (void *)WKBD_GROUPNEXT, NULL, getKeybind, setKeyGrab,
+    {"GroupNextKey", "\"Command+Tab\"", (void *)WKBD_NEXT_APP, NULL, getKeybind, setKeyGrab, NULL,
+     NULL},
+    {"GroupPrevKey", "\"Command+Shift+Tab\"", (void *)WKBD_PREV_APP, NULL, getKeybind, setKeyGrab,
      NULL, NULL},
-    {"GroupPrevKey", "\"Command+Shift+grave\"", (void *)WKBD_GROUPPREV, NULL, getKeybind,
-     setKeyGrab, NULL, NULL},
     /* Workspaces */
     {"NextWorkspaceKey", "\"Control+Right\"", (void *)WKBD_NEXT_DESKTOP, NULL, getKeybind,
      setKeyGrab, NULL, NULL},
@@ -807,9 +803,10 @@ static void _processWatchEvents(CFFileDescriptorRef fdref, CFOptionFlags callBac
    */
   eventQLength = read(w_global.inotify.fd_event_queue, buff, sizeof(buff));
 
-  if (eventQLength < 0) {
-    WMLogWarning("read problem when trying to get INotify event: %s", strerror(errno));
-    return;
+  if (eventQLength <= 0) {
+    // There's a problem to get events from queue. Enable callbacks again and wait for next event.
+    WMLogError("inotify: read problem when trying to get event: %s", strerror(errno));
+    goto done;
   }
 
   /* Check what events occured */
@@ -852,12 +849,13 @@ static void _processWatchEvents(CFFileDescriptorRef fdref, CFOptionFlags callBac
     i += sizeof(struct inotify_event) + pevent->len;
   }
 
+done:
   CFFileDescriptorEnableCallBacks(fdref, kCFFileDescriptorReadCallBack);
 }
 
 static Bool _initializeInotify()
 {
-  w_global.inotify.fd_event_queue = inotify_init();
+  w_global.inotify.fd_event_queue = inotify_init1(O_NONBLOCK);
   if (w_global.inotify.fd_event_queue < 0) {
     WMLogWarning("** inotify ** could not initialise an inotify instance."
                  " Changes to the defaults database will require a restart to take effect.");
@@ -2448,7 +2446,7 @@ static int setIconTile(WScreen * scr, WDefaultEntry * entry, void *tdata, void *
   scr->icon_tile = img;
 
   /* put the icon in the noticeboard hint */
-  PropSetIconTileHint(scr, img);
+  // PropSetIconTileHint(scr, img);
 
   if (!wPreferences.flags.noclip || wPreferences.flags.clip_merged_in_dock) {
     if (scr->clip_tile) {
@@ -2515,14 +2513,14 @@ static int setMiniwindowTile(WScreen *scr, WDefaultEntry *entry, void *tdata, vo
   scr->miniwindow_tile = img;
 
   /* put the icon in the noticeboard hint */
-  /* PropSetIconTileHint(scr, img); */
+  // PropSetIconTileHint(scr, img);
 
-  /* scr->icon_tile_pixmap = pixmap; */
+  // scr->icon_tile_pixmap = pixmap;
 
   /* icon back color for shadowing */
-  /*  if (scr->icon_back_texture)
-      wTextureDestroy(scr, (WTexture *) scr->icon_back_texture);
-      scr->icon_back_texture = wTextureMakeSolid(scr, &((*texture)->any.color));*/
+  // if (scr->icon_back_texture)
+  //   wTextureDestroy(scr, (WTexture *)scr->icon_back_texture);
+  // scr->icon_back_texture = wTextureMakeSolid(scr, &((*texture)->any.color));
 
   /* Free the texture as nobody else will use it, nor refer to it.  */
   if (!entry->addr)

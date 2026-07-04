@@ -21,24 +21,27 @@
 //
 
 #import <AppKit/AppKit.h>
+#import <DesktopKit/NXTClockView.h>
+#import <SystemKit/OSEDefaults.h>
 #import <Preferences.h>
+#import "Calendar.h"
 
 @interface Date : NSObject <PrefsModule>
 {
-   id window;
-   id view;
-   id timeZoneSelectorView;
-   id timeZoneRegionSelectorPopUpButton;
-   NSImage *image;
-   NSImage *handImage;
-}
+  IBOutlet NSWindow *window;
+  IBOutlet NSView *view;
+  IBOutlet NXTClockView *clockView;
+  IBOutlet NSButton *hour24Button;
+  IBOutlet NSTextField *timeField;
+  IBOutlet NSTextField *monthField;
+  IBOutlet NSTextField *yearField;
+  IBOutlet Calendar *calendarView;
+  id timeZoneSelectorView;
+  id timeZoneRegionSelectorPopUpButton;
+  NSImage *image;
+  NSImage *handImage;
 
-- (void) changeHourTypeAction: (id) sender;
-- (void) increaseFieldAction: (id) sender;
-- (void) decreaseFieldAction: (id) sender;
-- (void) changeClockFaceAction: (id) sender;
-- (void) selectRegionAction: (id) sender;
-- (void) setTimeAction: (id) sender;
-- (void) timeManuallyChangedAction: (id) sender;
+  OSEDefaults	*defaults;
+}
 
 @end

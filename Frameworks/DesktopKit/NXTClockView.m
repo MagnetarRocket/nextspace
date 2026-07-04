@@ -24,7 +24,7 @@
 #import <Foundation/NSDebug.h>
 #import <AppKit/AppKit.h>
 
-#import "NXTDefaults.h"
+#import <SystemKit/OSEDefaults.h>
 #import "NXTClockView.h"
 
 #define DNC [NSDistributedNotificationCenter defaultCenter]
@@ -106,7 +106,7 @@ NSString *NXTClockView24HourFormat = @"ClockView24HourFormat";
 
   // The next 2 method calls sets 'colonDisplayRect' ivar but it will not
   // cause drawing because 'is24HourFormat' was not changed
-  is24HourFormat = [[NXTDefaults globalUserDefaults]
+  is24HourFormat = [[OSEDefaults globalUserDefaults]
                          boolForKey:NXTClockView24HourFormat];
   [self set24HourFormat:is24HourFormat];
   
@@ -121,20 +121,19 @@ NSString *NXTClockView24HourFormat = @"ClockView24HourFormat";
   return self;
 }
 
-- initWithFrame:(NSRect)aFrame
-           tile:(NSImage *)image
-   displayRects:(NSDictionary *)rects
+- (void)setTileImage:(NSImage *)image
 {
-  NSString *rectString;
-  NSSize   tileSize;
-  
-  [self initWithFrame:aFrame];
+  NSSize tileSize;
 
   if (image != nil) {
     tileImage = image;
     tileSize = [image size];
     tileRect = NSMakeRect(0, 0, tileSize.width, tileSize.height);
   }
+}
+- (void)setDisplayRects:(NSDictionary *)rects
+{
+  NSString *rectString;
 
   // Reassert display rects already assigned in initWithFrame:
   if (rects != nil) {
@@ -149,8 +148,16 @@ NSString *NXTClockView24HourFormat = @"ClockView24HourFormat";
     if ((rectString = [rects objectForKey:@"Year"]) != nil)
       yearDisplayRect = NSRectFromString(rectString);
   }
-
   [self set24HourFormat:is24HourFormat];
+}
+
+- initWithFrame:(NSRect)aFrame
+           tile:(NSImage *)image
+   displayRects:(NSDictionary *)rects
+{
+  [self initWithFrame:aFrame];
+  [self setTileImage:image];
+  [self setDisplayRects:rects];
 
   return self;
 }
@@ -246,11 +253,11 @@ NSString *NXTClockView24HourFormat = @"ClockView24HourFormat";
 {
   NSRect myFrame = [self frame];
 
-  if (isYearVisible)
+  if (isYearVisible) {
     myFrame.size.height = 70;
-  else
-    myFrame.size.height = 57;
-  
+  } else {
+    myFrame.size.height = 64;
+  }
   myFrame.size.width = 55;
 
   [self setFrame:myFrame];
@@ -672,7 +679,7 @@ NSString *NXTClockView24HourFormat = @"ClockView24HourFormat";
 
   if ([notifObject isKindOfClass:[NSString class]]) {
     // NextSpace's NXGlobalDomain was changed
-    [self set24HourFormat:[[NXTDefaults globalUserDefaults]
+    [self set24HourFormat:[[OSEDefaults globalUserDefaults]
                             boolForKey:NXTClockView24HourFormat]];
   }
   else if ([notifObject isKindOfClass:[NSUserDefaults class]]) {

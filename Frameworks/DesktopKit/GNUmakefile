@@ -14,11 +14,10 @@ $(FRAMEWORK_NAME)_DEPLOY_WITH_CURRENT_VERSION = yes
 # $(wildcard *.m)
 $(FRAMEWORK_NAME)_OBJC_FILES = \
 	NXTBundle.m \
-	NXTDefaults.m \
-	NXTFileManager.m \
 	\
 	NXTClockView.m \
 	NXTAlert.m \
+	NXTCountdownAlert.m \
 	NXTIcon.m \
 	NXTIconLabel.m \
 	NXTIconView.m \
@@ -35,6 +34,8 @@ $(FRAMEWORK_NAME)_OBJC_FILES = \
 	NXTHelpPanel.m \
 	NXTListView.m \
 	NXTWorkspace.m \
+	NXTTabView.m \
+	NXTTabViewItem.m \
 	\
 	Utilities.m
 
@@ -42,10 +43,9 @@ $(FRAMEWORK_NAME)_HEADER_FILES = \
 	DesktopKit.h \
 	\
 	NXTBundle.h \
-	NXTDefaults.h \
-	NXTFileManager.h \
 	\
 	NXTAlert.h \
+	NXTCountdownAlert.h \
 	NXTClockView.h \
 	NXTIcon.h \
 	NXTIconLabel.h \
@@ -62,6 +62,8 @@ $(FRAMEWORK_NAME)_HEADER_FILES = \
 	NXTHelpPanel.h \
 	NXTListView.h \
 	NXTWorkspace.h \
+	NXTTabView.h \
+	NXTTabViewItem.h \
 	\
 	Utilities.h
 

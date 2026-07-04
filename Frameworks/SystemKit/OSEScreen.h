@@ -61,11 +61,11 @@
  - Providing mechanism to do various display manipulation: fading, switching
    to console, power management.
  */
+#include <X11/extensions/Xrandr.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/NSColor.h>
-
-#import <X11/extensions/Xrandr.h>
+#import <SystemKit/OSEPower.h>
 
 @class OSEDisplay;
 
@@ -87,8 +87,12 @@
   NSSize sizeInPixels, sizeInMilimeters;
 }
 
+@property (readonly) OSEPower *systemPower;
+
 + (id)sharedScreen;
 - (void)setUseAutosave:(BOOL)yn;
+
+- (BOOL)isLidClosed;
 
 - (XRRScreenResources *)randrScreenResources;
 - (void)randrUpdateScreenResources;
@@ -163,8 +167,9 @@ extern NSString *OSEDisplayNameKey;
 extern NSString *OSEDisplayFrameKey;
 extern NSString *OSEDisplayHiddenFrameKey;
 extern NSString *OSEDisplayFrameRateKey;
-extern NSString *OSEDisplaySizeKey;
-extern NSString *OSEDisplayRateKey;
+extern NSString *OSEDisplayResolutionNameKey;
+extern NSString *OSEDisplayResolutionSizeKey;
+extern NSString *OSEDisplayResolutionRateKey;
 extern NSString *OSEDisplayPhSizeKey;
 extern NSString *OSEDisplayPropertiesKey;
 

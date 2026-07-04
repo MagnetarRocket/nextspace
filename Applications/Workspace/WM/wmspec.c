@@ -34,6 +34,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include <core/WMcore.h>
 #include <core/util.h>
@@ -54,6 +55,8 @@
 #include "xrandr.h"
 #include "properties.h"
 #include "misc.h"
+
+#pragma mark - Definitions
 
 /* Root Window Properties */
 static Atom net_supported;
@@ -227,7 +230,6 @@ static atomitem_t atomNames[] = {
 #define _NET_WM_STATE_ADD 1
 #define _NET_WM_STATE_TOGGLE 2
 
-#if 0
 /*
  * These constant provide information on the kind of window move/resize when
  * it is initiated by the application instead of by WindowMaker. They are
@@ -235,13 +237,6 @@ static atomitem_t atomNames[] = {
  * FreeDesktop wm-spec standard:
  *   http://standards.freedesktop.org/wm-spec/1.5/ar01s04.html
  *
- * Today, WindowMaker does not support this at all (the corresponding Atom
- * is not added to the list in setSupportedHints), probably because there is
- * nothing it needs to do about it, the application is assumed to know what
- * it is doing, and WindowMaker won't get in the way.
- *
- * The definition of the constants (taken from the standard) are disabled to
- * avoid a spurious warning (-Wunused-macros).
  */
 #define _NET_WM_MOVERESIZE_SIZE_TOPLEFT 0
 #define _NET_WM_MOVERESIZE_SIZE_TOP 1
@@ -254,20 +249,44 @@ static atomitem_t atomNames[] = {
 #define _NET_WM_MOVERESIZE_MOVE 8           /* movement only */
 #define _NET_WM_MOVERESIZE_SIZE_KEYBOARD 9  /* size via keyboard */
 #define _NET_WM_MOVERESIZE_MOVE_KEYBOARD 10 /* move via keyboard */
-#endif
+#define _NET_WM_MOVERESIZE_CANCEL 11        /* cancel operation */
 
-static void windowObserver(CFNotificationCenterRef center, void *observer, CFNotificationName name,
-                           const void *window, CFDictionaryRef userInfo);
-static void desktopObserver(CFNotificationCenterRef center, void *observer, CFNotificationName name,
-                            const void *screen, CFDictionaryRef userInfo);
+#pragma mark - Static functions declaration
 
-static void updateClientList(WScreen *scr);
-static void updateClientListStacking(WScreen *scr, WWindow *);
+static void _windowObserver(CFNotificationCenterRef center, void *observer, CFNotificationName name,
+                            const void *window, CFDictionaryRef userInfo);
+static void _desktopObserver(CFNotificationCenterRef center, void *observer,
+                             CFNotificationName name, const void *screen, CFDictionaryRef userInfo);
 
-static void updateDesktopNames(WScreen *scr);
-static void updateCurrentDesktop(WScreen *scr);
-static void updateDesktopCount(WScreen *scr);
-static void wNETWMShowingDesktop(WScreen *scr, Bool show);
+static void _setSupportedHints(WScreen *scr);
+
+static unsigned long *_findBestIcon(unsigned long *data, unsigned long items);
+static RImage *_makeRImageFromARGBData(unsigned long *data);
+
+static void _updateIconImage(WWindow *wwin);
+static void _updateWindowOpacity(WWindow *wwin);
+static void _updateShowDesktop(WScreen *scr, Bool show);
+static void _showDesktop(WScreen *scr, Bool show);
+
+static void _updateClientList(WScreen *scr);
+static void _updateClientListStacking(WScreen *scr, WWindow *);
+static void _updateDesktopCount(WScreen *scr);
+static void _updateCurrentDesktop(WScreen *scr);
+static void _updateDesktopNames(WScreen *scr);
+
+static void _updateFocusHint(WScreen *scr);
+static void _updateDesktopHint(WWindow *wwin, Bool fake, Bool del);
+static void _updateStateHint(WWindow *wwin, Bool changedDesktop, Bool del);
+static Bool _updateStrut(WScreen *scr, Window w, Bool adding);
+static int _layerForWindow(WWindow *wwin);
+static void _doStateAtom(WWindow *wwin, Atom state, int set, Bool init);
+static void _removeIcon(WWindow *wwin);
+static Bool _getAttributesForWindowType(Atom type, WWindowAttributes *window_attrs, WWindow *wwin);
+static Bool _handleWindowType(WWindow *wwin, Atom type, int *layer);
+
+static void _updateWindowType(WWindow *wwin);
+static Bool _updateNetIconInfo(WWindow *wwin);
+static void _handleDesktopNames(WScreen *scr);
 
 typedef struct NetData {
   WScreen *scr;
@@ -275,7 +294,74 @@ typedef struct NetData {
   WWindow **show_desktop;
 } NetData;
 
-static void setSupportedHints(WScreen *scr)
+#pragma mark - Notifications
+
+static void _windowObserver(CFNotificationCenterRef center, void *netData, CFNotificationName name,
+                           const void *window, CFDictionaryRef userInfo)
+{
+  WWindow *wwin = (WWindow *)window;
+  NetData *ndata = (NetData *)netData;
+
+  if (!wwin)
+    return;
+
+  if (CFStringCompare(name, WMDidManageWindowNotification, 0) == 0) {
+    _updateClientList(wwin->screen);
+    _updateClientListStacking(wwin->screen, NULL);
+    _updateStateHint(wwin, True, False);
+
+    _updateStrut(wwin->screen, wwin->client_win, False);
+    _updateStrut(wwin->screen, wwin->client_win, True);
+    wScreenUpdateUsableArea(wwin->screen);
+  } else if (CFStringCompare(name, WMDidUnmanageWindowNotification, 0) == 0) {
+    _updateClientList(wwin->screen);
+    _updateClientListStacking(wwin->screen, wwin);
+    _updateDesktopHint(wwin, False, True);
+    _updateStateHint(wwin, False, True);
+    wNETWMUpdateActions(wwin, True);
+
+    _updateStrut(wwin->screen, wwin->client_win, False);
+    wScreenUpdateUsableArea(wwin->screen);
+  } else if (CFStringCompare(name, WMDidResetWindowStackingNotification, 0) == 0) {
+    _updateClientListStacking(wwin->screen, NULL);
+    _updateStateHint(wwin, False, False);
+  } else if (CFStringCompare(name, WMDidChangeWindowStackingNotification, 0) == 0) {
+    _updateClientListStacking(wwin->screen, NULL);
+    _updateStateHint(wwin, False, False);
+  } else if (CFStringCompare(name, WMDidChangeWindowFocusNotification, 0) == 0) {
+    _updateFocusHint(ndata->scr);
+  } else if (CFStringCompare(name, WMDidChangeWindowDesktopNotification, 0) == 0) {
+    _updateDesktopHint(wwin, False, False);
+    _updateStateHint(wwin, True, False);
+  } else if (CFStringCompare(name, WMDidChangeWindowStateNotification, 0) == 0) {
+    CFStringRef wstate = (CFStringRef)wGetNotificationInfoValue(userInfo, CFSTR("state"));
+    _updateStateHint(wwin, !CFStringCompare(wstate, CFSTR("omnipresent"), 0), False);
+  }
+}
+
+static void _desktopObserver(CFNotificationCenterRef center, void *netData, CFNotificationName name,
+                            const void *screen, CFDictionaryRef userInfo)
+{
+  WScreen *scr = (WScreen *)screen;
+
+  if (CFStringCompare(name, WMDidCreateDesktopNotification, 0) == 0) {
+    _updateDesktopCount(scr);
+    _updateDesktopNames(scr);
+    wNETWMUpdateWorkarea(scr);
+  } else if (CFStringCompare(name, WMDidDestroyDesktopNotification, 0) == 0) {
+    _updateDesktopCount(scr);
+    _updateDesktopNames(scr);
+    wNETWMUpdateWorkarea(scr);
+  } else if (CFStringCompare(name, WMDidChangeDesktopNotification, 0) == 0) {
+    _updateCurrentDesktop(scr);
+  } else if (CFStringCompare(name, WMDidChangeDesktopNameNotification, 0) == 0) {
+    _updateDesktopNames(scr);
+  }
+}
+
+#pragma mark - Init and cleanup
+
+static void _setSupportedHints(WScreen *scr)
 {
   Atom atom[wlengthof(atomNames)];
   int i = 0;
@@ -294,9 +380,12 @@ static void setSupportedHints(WScreen *scr)
   atom[i++] = net_workarea;
   atom[i++] = net_supporting_wm_check;
   atom[i++] = net_showing_desktop;
+
 #if 0
-  atom[i++] = net_wm_moveresize;
+  atom[i++] = net_moveresize_window;
 #endif
+  atom[i++] = net_wm_moveresize;
+
   atom[i++] = net_request_frame_extents;
   atom[i++] = net_wm_desktop;
   atom[i++] = net_wm_window_type;
@@ -362,248 +451,6 @@ static void setSupportedHints(WScreen *scr)
                   (unsigned char *)&scr->info_window, 1);
 }
 
-void wNETWMUpdateDesktop(WScreen *scr)
-{
-  long *views, sizes[2];
-  int count, i;
-
-  if (scr->desktop_count == 0)
-    return;
-
-  count = scr->desktop_count * 2;
-  views = wmalloc(sizeof(long) * count);
-  sizes[0] = scr->width;
-  sizes[1] = scr->height;
-
-  for (i = 0; i < scr->desktop_count; i++) {
-    views[2 * i + 0] = 0;
-    views[2 * i + 1] = 0;
-  }
-
-  XChangeProperty(dpy, scr->root_win, net_desktop_geometry, XA_CARDINAL, 32, PropModeReplace,
-                  (unsigned char *)sizes, 2);
-
-  XChangeProperty(dpy, scr->root_win, net_desktop_viewport, XA_CARDINAL, 32, PropModeReplace,
-                  (unsigned char *)views, count);
-
-  wfree(views);
-}
-
-int wNETWMGetCurrentDesktopFromHint(WScreen *scr)
-{
-  int count;
-  unsigned char *prop;
-
-  prop = PropGetCheckProperty(scr->root_win, net_current_desktop, XA_CARDINAL, 0, 1, &count);
-  if (prop) {
-    int desktop = *(long *)prop;
-    XFree(prop);
-    return desktop;
-  }
-  return -1;
-}
-
-/*
- * Find the best icon to be used by Window Maker for appicon/miniwindows.
- * Currently the algorithm is to take the image with the size closest
- * to icon_size x icon_size, but never bigger than that.
- *
- * This algorithm is very poorly implemented and needs to be redone (it can
- * easily select images with very large widths and very small heights over
- * square images, if the area of the former is closer to the desired one).
- *
- * The logic can also be changed to accept bigger images and scale them down.
- */
-static unsigned long *findBestIcon(unsigned long *data, unsigned long items)
-{
-  int size, wanted, d;
-  unsigned long i, distance;
-  unsigned long *icon;
-
-  /* Use only 75% of icon_size. For 64x64 this means 48x48.
-   * This leaves room around the icon for the miniwindow title and
-   * results in better overall aesthetics -Dan */
-  wanted = (wPreferences.icon_size * 0.75) * (wPreferences.icon_size * 0.75);
-
-  for (icon = NULL, distance = wanted, i = 0L; i < items - 1;) {
-    size = data[i] * data[i + 1];
-    if (size == 0)
-      break;
-    d = wanted - size;
-    if (d >= 0 && d <= distance && (i + size + 2) <= items) {
-      distance = d;
-      icon = &data[i];
-    }
-    i += size + 2;
-  }
-
-  return icon;
-}
-
-static RImage *makeRImageFromARGBData(unsigned long *data)
-{
-  int size, width, height, i;
-  RImage *image;
-  unsigned char *imgdata;
-  unsigned long pixel;
-
-  width = data[0];
-  height = data[1];
-  size = width * height;
-
-  if (size == 0)
-    return NULL;
-
-  image = RCreateImage(width, height, True);
-
-  for (imgdata = image->data, i = 2; i < size + 2; i++, imgdata += 4) {
-    pixel = data[i];
-    imgdata[3] = (pixel >> 24) & 0xff; /* A */
-    imgdata[0] = (pixel >> 16) & 0xff; /* R */
-    imgdata[1] = (pixel >> 8) & 0xff;  /* G */
-    imgdata[2] = (pixel >> 0) & 0xff;  /* B */
-  }
-
-  return image;
-}
-
-RImage *get_window_image_from_x11(Window window)
-{
-  RImage *image;
-  Atom type;
-  int format;
-  unsigned long items, rest;
-  unsigned long *property, *data;
-
-  /* Get the icon from X11 Window */
-  if (XGetWindowProperty(dpy, window, net_wm_icon, 0L, LONG_MAX, False, XA_CARDINAL, &type, &format,
-                         &items, &rest, (unsigned char **)&property) != Success ||
-      !property)
-    return NULL;
-
-  if (type != XA_CARDINAL || format != 32 || items < 2) {
-    XFree(property);
-    return NULL;
-  }
-
-  /* Find the best icon */
-  data = findBestIcon(property, items);
-  if (!data) {
-    XFree(property);
-    return NULL;
-  }
-
-  /* Save the best icon in the X11 icon */
-  image = makeRImageFromARGBData(data);
-
-  XFree(property);
-
-  /* Resize the image to the correct value */
-  image = wIconValidateIconSize(image, wPreferences.icon_size);
-
-  return image;
-}
-
-static void updateIconImage(WWindow *wwin)
-{
-  /* Remove the icon image from X11 */
-  if (wwin->net_icon_image)
-    RReleaseImage(wwin->net_icon_image);
-
-  /* Save the icon in the X11 icon */
-  wwin->net_icon_image = get_window_image_from_x11(wwin->client_win);
-
-  /* Refresh the Window Icon */
-  if (wwin->icon)
-    wIconUpdate(wwin->icon);
-
-  /* Refresh the application icon */
-  WApplication *app = wApplicationOf(wwin->main_window);
-  if (app && app->app_icon) {
-    WWindow *app_owner = app->app_icon->icon->owner;
-    if (app_owner && !app_owner->net_icon_image) {
-      app_owner->net_icon_image = get_window_image_from_x11(wwin->client_win);
-      wIconUpdate(app->app_icon->icon);
-      wAppIconPaint(app->app_icon);
-    }
-  }
-}
-
-static void updateWindowOpacity(WWindow *wwin)
-{
-  Atom type;
-  int format;
-  unsigned long items, rest;
-  unsigned long *property;
-
-  if (!wwin->frame)
-    return;
-
-  /* We don't care about this ourselves, but other programs need us to copy
-   * this to the frame window. */
-  if (XGetWindowProperty(dpy, wwin->client_win, net_wm_window_opacity, 0L, 1L, False, XA_CARDINAL,
-                         &type, &format, &items, &rest, (unsigned char **)&property) != Success)
-    return;
-
-  if (type == None) {
-    XDeleteProperty(dpy, wwin->frame->core->window, net_wm_window_opacity);
-  } else if (type == XA_CARDINAL && format == 32 && items == 1 && property) {
-    XChangeProperty(dpy, wwin->frame->core->window, net_wm_window_opacity, XA_CARDINAL, 32,
-                    PropModeReplace, (unsigned char *)property, 1L);
-  }
-
-  if (property)
-    XFree(property);
-}
-
-static void updateShowDesktop(WScreen *scr, Bool show)
-{
-  long foo;
-
-  foo = (show == True);
-  XChangeProperty(dpy, scr->root_win, net_showing_desktop, XA_CARDINAL, 32, PropModeReplace,
-                  (unsigned char *)&foo, 1);
-}
-
-static void wNETWMShowingDesktop(WScreen *scr, Bool show)
-{
-  if (show && scr->netdata->show_desktop == NULL) {
-    WWindow *tmp, **wins;
-    int i = 0;
-
-    wins = (WWindow **)wmalloc(sizeof(WWindow *) * (scr->window_count + 1));
-
-    tmp = scr->focused_window;
-    while (tmp) {
-      if (!tmp->flags.hidden && !tmp->flags.miniaturized && !WFLAGP(tmp, skip_window_list)) {
-        wins[i++] = tmp;
-        tmp->flags.skip_next_animation = 1;
-        tmp->flags.net_show_desktop = 1;
-        wIconifyWindow(tmp);
-      }
-
-      tmp = tmp->prev;
-    }
-    wins[i++] = NULL;
-
-    scr->netdata->show_desktop = wins;
-    updateShowDesktop(scr, True);
-  } else if (scr->netdata->show_desktop != NULL) {
-    /* FIXME: get rid of desktop flashing ! */
-    int ws = scr->current_desktop;
-    WWindow **tmp;
-    for (tmp = scr->netdata->show_desktop; *tmp; ++tmp) {
-      wDeiconifyWindow(*tmp);
-      (*tmp)->flags.net_show_desktop = 0;
-    }
-    if (ws != scr->current_desktop)
-      wDesktopChange(scr, ws, NULL);
-    wfree(scr->netdata->show_desktop);
-    scr->netdata->show_desktop = NULL;
-    updateShowDesktop(scr, False);
-  }
-}
-
 void wNETWMInitStuff(WScreen *scr)
 {
   NetData *data;
@@ -637,48 +484,49 @@ void wNETWMInitStuff(WScreen *scr)
 
   scr->netdata = data;
 
-  setSupportedHints(scr);
+  _setSupportedHints(scr);
 
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidManageWindowNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidUnmanageWindowNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidChangeWindowDesktopNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidChangeWindowStateNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidChangeWindowFocusNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidChangeWindowStackingNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, windowObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _windowObserver,
                                   WMDidChangeWindowNameNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
 
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, desktopObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _desktopObserver,
                                   WMDidCreateDesktopNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, desktopObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _desktopObserver,
                                   WMDidDestroyDesktopNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, desktopObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _desktopObserver,
                                   WMDidChangeDesktopNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
-  CFNotificationCenterAddObserver(scr->notificationCenter, data, desktopObserver,
+  CFNotificationCenterAddObserver(scr->notificationCenter, data, _desktopObserver,
                                   WMDidChangeDesktopNameNotification, NULL,
                                   CFNotificationSuspensionBehaviorDeliverImmediately);
 
-  updateClientList(scr);
-  updateClientListStacking(scr, NULL);
-  updateDesktopCount(scr);
-  updateDesktopNames(scr);
-  updateShowDesktop(scr, False);
+  _updateClientList(scr);
+  _updateClientListStacking(scr, NULL);
+  _updateDesktopCount(scr);
+  _updateDesktopNames(scr);
+  _updateCurrentDesktop(scr);
+  _updateShowDesktop(scr, False);
 
   wScreenUpdateUsableArea(scr);
 }
@@ -735,6 +583,258 @@ void wNETWMUpdateActions(WWindow *wwin, Bool del)
 
   XChangeProperty(dpy, wwin->client_win, net_wm_allowed_actions, XA_ATOM, 32, PropModeReplace,
                   (unsigned char *)action, i);
+}
+
+#pragma mark - WM spec
+
+void wNETWMUpdateDesktop(WScreen *scr)
+{
+  long *views, sizes[2];
+  int count, i;
+
+  if (scr->desktop_count == 0)
+    return;
+
+  count = scr->desktop_count * 2;
+  views = wmalloc(sizeof(long) * count);
+  sizes[0] = scr->width;
+  sizes[1] = scr->height;
+
+  for (i = 0; i < scr->desktop_count; i++) {
+    views[2 * i + 0] = 0;
+    views[2 * i + 1] = 0;
+  }
+
+  XChangeProperty(dpy, scr->root_win, net_desktop_geometry, XA_CARDINAL, 32, PropModeReplace,
+                  (unsigned char *)sizes, 2);
+
+  XChangeProperty(dpy, scr->root_win, net_desktop_viewport, XA_CARDINAL, 32, PropModeReplace,
+                  (unsigned char *)views, count);
+
+  wfree(views);
+}
+
+int wNETWMGetCurrentDesktopFromHint(WScreen *scr)
+{
+  int count;
+  unsigned char *prop;
+
+  prop = wPropertiesGetWindowProperty(scr->root_win, net_current_desktop, XA_CARDINAL, 0, 1, &count);
+  if (prop) {
+    int desktop = *(long *)prop;
+    XFree(prop);
+    return desktop;
+  }
+  return -1;
+}
+
+/*
+ * Find the best icon to be used by Window Maker for appicon/miniwindows.
+ * Currently the algorithm is to take the image with the size closest
+ * to icon_size x icon_size, but never bigger than that.
+ *
+ * This algorithm is very poorly implemented and needs to be redone (it can
+ * easily select images with very large widths and very small heights over
+ * square images, if the area of the former is closer to the desired one).
+ *
+ * The logic can also be changed to accept bigger images and scale them down.
+ */
+static unsigned long *_findBestIcon(unsigned long *data, unsigned long items)
+{
+  int width, height, size;
+  int wanted_width, wanted_height, wanted_size;
+  unsigned long i, distance;
+  unsigned long *icon = NULL;
+
+  /* Use only 75% of icon_size. For 64x64 this means 48x48.
+   * This leaves room around the icon for the miniwindow title and
+   * results in better overall aesthetics -Dan */
+  wanted_width = wanted_height = wPreferences.icon_size * 0.75;
+  distance = wanted_size = wanted_width * wanted_height;
+
+  for (i = 0L; i < items - 1;) {
+    width = data[i];
+    height = data[i + 1];
+    size = width * height;
+    if (size == 0) {
+      break;
+    }
+    distance = abs(wanted_size - size);
+    if (distance >= 0 && (i + size + 2) <= items) {
+      icon = &data[i];
+    }
+    if (width >= wanted_height || height >= wanted_height) {
+      break;
+    }
+    i += size + 2;
+  }
+
+  return icon;
+}
+
+static RImage *_makeRImageFromARGBData(unsigned long *data)
+{
+  int size, width, height, i;
+  RImage *image;
+  unsigned char *imgdata;
+  unsigned long pixel;
+
+  width = data[0];
+  height = data[1];
+  size = width * height;
+
+  if (size == 0) {
+    return NULL;
+  }
+  image = RCreateImage(width, height, True);
+  if (!image) {
+    return NULL;
+  }
+  for (imgdata = image->data, i = 2; i < size + 2; i++, imgdata += 4) {
+    pixel = data[i];
+    imgdata[3] = (pixel >> 24) & 0xff; /* A */
+    imgdata[0] = (pixel >> 16) & 0xff; /* R */
+    imgdata[1] = (pixel >> 8) & 0xff;  /* G */
+    imgdata[2] = (pixel >> 0) & 0xff;  /* B */
+  }
+
+  return image;
+}
+
+RImage *wNETWMImageFromWindow(Window window)
+{
+  RImage *image;
+  Atom type;
+  int format;
+  unsigned long items, rest;
+  unsigned long *property, *data;
+
+  /* Get the icon from X11 Window */
+  if (XGetWindowProperty(dpy, window, net_wm_icon, 0L, LONG_MAX, False, XA_CARDINAL, &type, &format,
+                         &items, &rest, (unsigned char **)&property) != Success || !property) {
+    return NULL;
+  }
+
+  if (type != XA_CARDINAL || format != 32 || items < 2) {
+    XFree(property);
+    return NULL;
+  }
+
+  /* Find the best icon */
+  data = _findBestIcon(property, items);
+  if (!data) {
+    data = &property[0];
+  }
+
+  /* Save the best icon in the X11 icon */
+  image = _makeRImageFromARGBData(data);
+
+  XFree(property);
+
+  /* Resize the image to the correct value */
+  image = wIconValidateIconSize(image, wPreferences.icon_size * 0.75);
+
+  return image;
+}
+
+static void _updateIconImage(WWindow *wwin)
+{
+  /* Remove the icon image from X11 */
+  if (wwin->net_icon_image)
+    RReleaseImage(wwin->net_icon_image);
+
+  /* Save the icon in the X11 icon */
+  wwin->net_icon_image = wNETWMImageFromWindow(wwin->client_win);
+
+  /* Refresh the Window Icon */
+  if (wwin->icon)
+    wIconUpdate(wwin->icon);
+
+  /* Refresh the application icon */
+  WApplication *app = wApplicationOf(wwin->main_window);
+  if (app && app->app_icon) {
+    WWindow *app_owner = app->app_icon->icon->owner;
+    if (app_owner && !app_owner->net_icon_image) {
+      app_owner->net_icon_image = wNETWMImageFromWindow(wwin->client_win);
+      wIconUpdate(app->app_icon->icon);
+      wAppIconPaint(app->app_icon);
+    }
+  }
+}
+
+static void _updateWindowOpacity(WWindow *wwin)
+{
+  Atom type;
+  int format;
+  unsigned long items, rest;
+  unsigned long *property;
+
+  if (!wwin->frame)
+    return;
+
+  /* We don't care about this ourselves, but other programs need us to copy
+   * this to the frame window. */
+  if (XGetWindowProperty(dpy, wwin->client_win, net_wm_window_opacity, 0L, 1L, False, XA_CARDINAL,
+                         &type, &format, &items, &rest, (unsigned char **)&property) != Success)
+    return;
+
+  if (type == None) {
+    XDeleteProperty(dpy, wwin->frame->core->window, net_wm_window_opacity);
+  } else if (type == XA_CARDINAL && format == 32 && items == 1 && property) {
+    XChangeProperty(dpy, wwin->frame->core->window, net_wm_window_opacity, XA_CARDINAL, 32,
+                    PropModeReplace, (unsigned char *)property, 1L);
+  }
+
+  if (property)
+    XFree(property);
+}
+
+static void _updateShowDesktop(WScreen *scr, Bool show)
+{
+  long foo;
+
+  foo = (show == True);
+  XChangeProperty(dpy, scr->root_win, net_showing_desktop, XA_CARDINAL, 32, PropModeReplace,
+                  (unsigned char *)&foo, 1);
+}
+
+static void _showDesktop(WScreen *scr, Bool show)
+{
+  if (show && scr->netdata->show_desktop == NULL) {
+    WWindow *tmp, **wins;
+    int i = 0;
+
+    wins = (WWindow **)wmalloc(sizeof(WWindow *) * (scr->window_count + 1));
+
+    tmp = scr->focused_window;
+    while (tmp) {
+      if (!tmp->flags.hidden && !tmp->flags.miniaturized && !WFLAGP(tmp, skip_window_list)) {
+        wins[i++] = tmp;
+        tmp->flags.skip_next_animation = 1;
+        tmp->flags.net_show_desktop = 1;
+        wIconifyWindow(tmp);
+      }
+
+      tmp = tmp->prev;
+    }
+    wins[i++] = NULL;
+
+    scr->netdata->show_desktop = wins;
+    _updateShowDesktop(scr, True);
+  } else if (scr->netdata->show_desktop != NULL) {
+    /* FIXME: get rid of desktop flashing ! */
+    int ws = scr->current_desktop;
+    WWindow **tmp;
+    for (tmp = scr->netdata->show_desktop; *tmp; ++tmp) {
+      wDeiconifyWindow(*tmp);
+      (*tmp)->flags.net_show_desktop = 0;
+    }
+    if (ws != scr->current_desktop)
+      wDesktopChange(scr, ws, NULL);
+    wfree(scr->netdata->show_desktop);
+    scr->netdata->show_desktop = NULL;
+    _updateShowDesktop(scr, False);
+  }
 }
 
 void wNETWMUpdateWorkarea(WScreen *scr)
@@ -838,7 +938,7 @@ Bool wNETWMGetUsableArea(WScreen *scr, int head, WArea *area)
   return True;
 }
 
-static void updateClientList(WScreen *scr)
+static void _updateClientList(WScreen *scr)
 {
   WWindow *wwin;
   Window *windows;
@@ -859,7 +959,7 @@ static void updateClientList(WScreen *scr)
   XFlush(dpy);
 }
 
-static void updateClientListStacking(WScreen *scr, WWindow *wwin_excl)
+static void _updateClientListStacking(WScreen *scr, WWindow *wwin_excl)
 {
   WWindow *wwin;
   Window *client_list, *client_list_reverse;
@@ -899,7 +999,7 @@ static void updateClientListStacking(WScreen *scr, WWindow *wwin_excl)
   XFlush(dpy);
 }
 
-static void updateDesktopCount(WScreen *scr)
+static void _updateDesktopCount(WScreen *scr)
 { /* changeable */
   long count;
 
@@ -909,7 +1009,7 @@ static void updateDesktopCount(WScreen *scr)
                   (unsigned char *)&count, 1);
 }
 
-static void updateCurrentDesktop(WScreen *scr)
+static void _updateCurrentDesktop(WScreen *scr)
 { /* changeable */
   long count;
 
@@ -919,7 +1019,7 @@ static void updateCurrentDesktop(WScreen *scr)
                   (unsigned char *)&count, 1);
 }
 
-static void updateDesktopNames(WScreen *scr)
+static void _updateDesktopNames(WScreen *scr)
 {
   char buf[MAX_DESKTOPS * (MAX_DESKTOPNAME_WIDTH + 1)], *pos;
   unsigned int i, len, curr_size;
@@ -937,7 +1037,7 @@ static void updateDesktopNames(WScreen *scr)
                   (unsigned char *)buf, len);
 }
 
-static void updateFocusHint(WScreen *scr)
+static void _updateFocusHint(WScreen *scr)
 { /* changeable */
   Window window;
 
@@ -950,7 +1050,7 @@ static void updateFocusHint(WScreen *scr)
                   (unsigned char *)&window, 1);
 }
 
-static void updateDesktopHint(WWindow *wwin, Bool fake, Bool del)
+static void _updateDesktopHint(WWindow *wwin, Bool fake, Bool del)
 {
   long l;
 
@@ -963,7 +1063,7 @@ static void updateDesktopHint(WWindow *wwin, Bool fake, Bool del)
   }
 }
 
-static void updateStateHint(WWindow *wwin, Bool changedDesktop, Bool del)
+static void _updateStateHint(WWindow *wwin, Bool changedDesktop, Bool del)
 { /* changeable */
   if (del) {
     XDeleteProperty(dpy, wwin->client_win, net_wm_state);
@@ -972,7 +1072,7 @@ static void updateStateHint(WWindow *wwin, Bool changedDesktop, Bool del)
     int i = 0;
 
     if (changedDesktop || (wPreferences.sticky_icons && !IS_OMNIPRESENT(wwin)))
-      updateDesktopHint(wwin, False, False);
+      _updateDesktopHint(wwin, False, False);
 
     if (IS_OMNIPRESENT(wwin))
       state[i++] = net_wm_state_sticky;
@@ -992,7 +1092,7 @@ static void updateStateHint(WWindow *wwin, Bool changedDesktop, Bool del)
 
       if (wwin->flags.miniaturized && wPreferences.sticky_icons) {
         if (!IS_OMNIPRESENT(wwin))
-          updateDesktopHint(wwin, True, False);
+          _updateDesktopHint(wwin, True, False);
         state[i++] = net_wm_state_sticky;
       }
     }
@@ -1008,7 +1108,7 @@ static void updateStateHint(WWindow *wwin, Bool changedDesktop, Bool del)
   }
 }
 
-static Bool updateStrut(WScreen *scr, Window w, Bool adding)
+static Bool _updateStrut(WScreen *scr, Window w, Bool adding)
 {
   WReservedArea *area;
   Bool hasState = False;
@@ -1076,7 +1176,7 @@ static Bool updateStrut(WScreen *scr, Window w, Bool adding)
   return hasState;
 }
 
-static int getWindowLayer(WWindow *wwin)
+static int _layerForWindow(WWindow *wwin)
 {
   int layer = NSNormalWindowLevel;
 
@@ -1122,7 +1222,7 @@ static int getWindowLayer(WWindow *wwin)
   return layer;
 }
 
-static void doStateAtom(WWindow *wwin, Atom state, int set, Bool init)
+static void _doStateAtom(WWindow *wwin, Atom state, int set, Bool init)
 {
   if (state == net_wm_state_sticky) {
     if (set == _NET_WM_STATE_TOGGLE)
@@ -1209,7 +1309,7 @@ static void doStateAtom(WWindow *wwin, Atom state, int set, Bool init)
       wwin->client_flags.floating = set;
     } else {
       wwin->client_flags.floating = set;
-      ChangeStackingLevel(wwin->frame->core, getWindowLayer(wwin));
+      ChangeStackingLevel(wwin->frame->core, _layerForWindow(wwin));
     }
 
   } else if (state == net_wm_state_below) {
@@ -1220,7 +1320,7 @@ static void doStateAtom(WWindow *wwin, Atom state, int set, Bool init)
       wwin->client_flags.sunken = set;
     } else {
       wwin->client_flags.sunken = set;
-      ChangeStackingLevel(wwin->frame->core, getWindowLayer(wwin));
+      ChangeStackingLevel(wwin->frame->core, _layerForWindow(wwin));
     }
 
   } else {
@@ -1230,7 +1330,7 @@ static void doStateAtom(WWindow *wwin, Atom state, int set, Bool init)
   }
 }
 
-static void removeIcon(WWindow *wwin)
+static void _removeIcon(WWindow *wwin)
 {
   if (wwin->icon == NULL)
     return;
@@ -1377,14 +1477,14 @@ static Bool _getAttributesForWindowType(Atom type, WWindowAttributes *window_att
   return success;
 }
 
-static Bool handleWindowType(WWindow *wwin, Atom type, int *layer)
+static Bool _handleWindowType(WWindow *wwin, Atom type, int *layer)
 {
   Bool ret = True;
 
   ret = _getAttributesForWindowType(type, &wwin->client_flags, wwin);
 
   wwin->type = type;
-  *layer = getWindowLayer(wwin);
+  *layer = _layerForWindow(wwin);
 
   return ret;
 }
@@ -1399,7 +1499,7 @@ void wNETWMPositionSplash(WWindow *wwin, int *x, int *y, int width, int height)
   }
 }
 
-static void updateWindowType(WWindow *wwin)
+static void _updateWindowType(WWindow *wwin)
 {
   Atom type_ret;
   int fmt_ret, layer;
@@ -1413,7 +1513,7 @@ static void updateWindowType(WWindow *wwin)
     int i;
     Atom *type = (Atom *)data;
     for (i = 0; i < nitems_ret; ++i) {
-      if (handleWindowType(wwin, type[i], &layer))
+      if (_handleWindowType(wwin, type[i], &layer))
         break;
     }
     XFree(data);
@@ -1454,7 +1554,7 @@ void wNETWMCheckClientHints(WWindow *wwin, int *layer, int *desktop)
       data) {
     Atom *state = (Atom *)data;
     for (i = 0; i < nitems_ret; ++i)
-      doStateAtom(wwin, state[i], _NET_WM_STATE_ADD, True);
+      _doStateAtom(wwin, state[i], _NET_WM_STATE_ADD, True);
 
     XFree(data);
   }
@@ -1465,20 +1565,20 @@ void wNETWMCheckClientHints(WWindow *wwin, int *layer, int *desktop)
       data) {
     Atom *type = (Atom *)data;
     for (i = 0; i < nitems_ret; ++i) {
-      if (handleWindowType(wwin, type[i], layer))
+      if (_handleWindowType(wwin, type[i], layer))
         break;
     }
     XFree(data);
   }
 
   wNETWMUpdateActions(wwin, False);
-  updateStrut(wwin->screen, wwin->client_win, False);
-  updateStrut(wwin->screen, wwin->client_win, True);
+  _updateStrut(wwin->screen, wwin->client_win, False);
+  _updateStrut(wwin->screen, wwin->client_win, True);
 
   wScreenUpdateUsableArea(wwin->screen);
 }
 
-static Bool updateNetIconInfo(WWindow *wwin)
+static Bool _updateNetIconInfo(WWindow *wwin)
 {
   Atom type_ret;
   int fmt_ret;
@@ -1524,7 +1624,7 @@ static Bool updateNetIconInfo(WWindow *wwin)
 
   if (wwin->flags.miniaturized && old_state != wwin->flags.net_handle_icon) {
     if (wwin->flags.net_handle_icon) {
-      removeIcon(wwin);
+      _removeIcon(wwin);
     } else {
       wwin->flags.miniaturized = False;
       wwin->flags.skip_next_animation = True;
@@ -1541,15 +1641,15 @@ void wNETWMCheckInitialClientState(WWindow *wwin)
   WMLogInfo("wNETWMCheckInitialClientState");
 #endif
 
-  wNETWMShowingDesktop(wwin->screen, False);
+  _showDesktop(wwin->screen, False);
 
-  updateWindowType(wwin);
-  updateNetIconInfo(wwin);
+  _updateWindowType(wwin);
+  _updateNetIconInfo(wwin);
 
   /* Do it on the first window of application.
      Other icon updates should go through NET_WM_ICON_NAME property change. */
   if (!wApplicationOf(wwin->main_window)) {
-    updateIconImage(wwin);
+    _updateIconImage(wwin);
   }
 }
 
@@ -1559,10 +1659,10 @@ void wNETWMCheckInitialFrameState(WWindow *wwin)
   WMLogInfo("wNETWMCheckInitialFrameState");
 #endif
 
-  updateWindowOpacity(wwin);
+  _updateWindowOpacity(wwin);
 }
 
-static void handleDesktopNames(WScreen *scr)
+static void _handleDesktopNames(WScreen *scr)
 {
   unsigned long nitems_ret, bytes_after_ret;
   char *data, *names[32];
@@ -1630,22 +1730,22 @@ Bool wNETWMProcessClientMessage(XClientMessageEvent *event)
         }
       }
       if (rebuild) {
-        updateDesktopCount(scr);
+        _updateDesktopCount(scr);
       }
     }
     return True;
 
   } else if (event->message_type == net_showing_desktop) {
-    wNETWMShowingDesktop(scr, event->data.l[0]);
+    _showDesktop(scr, event->data.l[0]);
     return True;
   } else if (event->message_type == net_desktop_names) {
-    handleDesktopNames(scr);
+    _handleDesktopNames(scr);
     return True;
   }
 
   /*
      Application Window properties messages
-  */
+   */
 
   /* Window could (and often is) not unmanaged at this point */
   if (event->message_type == net_request_frame_extents) {
@@ -1670,7 +1770,7 @@ Bool wNETWMProcessClientMessage(XClientMessageEvent *event)
     if (wwin->frame->desktop == wwin->screen->current_desktop /* No desktop change */
         || event->data.l[0] == 2                              /* Requested by pager */
         || WFLAGP(wwin, focus_across_wksp) /* Explicitly allowed */) {
-      wNETWMShowingDesktop(scr, False);
+      _showDesktop(scr, False);
       wMakeWindowVisible(wwin);
     }
     return True;
@@ -1691,9 +1791,9 @@ Bool wNETWMProcessClientMessage(XClientMessageEvent *event)
               XGetAtomName(dpy, event->data.l[2]));
 #endif
 
-    doStateAtom(wwin, (Atom)event->data.l[1], set, False);
+    _doStateAtom(wwin, (Atom)event->data.l[1], set, False);
     if (event->data.l[2]) {
-      doStateAtom(wwin, (Atom)event->data.l[2], set, False);
+      _doStateAtom(wwin, (Atom)event->data.l[2], set, False);
     }
     if (wwin->flags.maximized != maximized) {
       if (!wwin->flags.maximized) {
@@ -1703,12 +1803,12 @@ Bool wNETWMProcessClientMessage(XClientMessageEvent *event)
         wMaximizeWindow(wwin, wwin->flags.maximized);
       }
     }
-    updateStateHint(wwin, False, False);
+    _updateStateHint(wwin, False, False);
     return True;
 
   } else if (event->message_type == net_wm_handled_icons ||
              event->message_type == net_wm_icon_geometry) {
-    updateNetIconInfo(wwin);
+    _updateNetIconInfo(wwin);
     return True;
 
   } else if (event->message_type == net_wm_desktop) {
@@ -1725,6 +1825,86 @@ Bool wNETWMProcessClientMessage(XClientMessageEvent *event)
     return True;
   }
 
+  /*
+      Move and resize
+   */
+  if (event->message_type == net_moveresize_window) {
+    // _NET_MOVERESIZE_WINDOW
+    //   window = window to be moved or resized
+    //   message_type = _NET_MOVERESIZE_WINDOW
+    //   format = 32
+    //   data.l[0] = gravity and flags
+    //   data.l[1] = x
+    //   data.l[2] = y
+    //   data.l[3] = width
+    //   data.l[4] = height
+    fprintf(stderr, "%s: _NET_MOVERESIZE_WINDOW: %li, %li | %li x %li\n", __func__, event->data.l[1],
+            event->data.l[2], event->data.l[3], event->data.l[4]);
+  } else if (event->message_type == net_wm_moveresize) {
+    // _NET_WM_MOVERESIZE
+    //   window = window to be moved or resized
+    //   message_type = _NET_WM_MOVERESIZE
+    //   format = 32
+    //   data.l[0] = x_root
+    //   data.l[1] = y_root
+    //   data.l[2] = direction
+    //   data.l[3] = button
+    //   data.l[4] = source indication
+    static struct timeval prev_time = {.tv_sec = 0L, .tv_usec = 0L};
+    struct timeval cur_time = {.tv_sec = 0L, .tv_usec = 0L};
+    XEvent xevent;
+
+    gettimeofday(&cur_time, NULL);
+    // fprintf(stderr, "%s: elapsed %li seconds since last XClientMessageEvent.\n", __func__,
+    //         cur_time.tv_sec - prev_time.tv_sec);
+    if (prev_time.tv_sec > 0L && (cur_time.tv_sec - prev_time.tv_sec) < 1L) {
+      return False;
+    }
+
+    // fprintf(stderr,
+    //         "%s: _NET_WM_MOVERESIZE: %li, %li | direction: %li, button: %li, source direction: %li "
+    //         "serial: %lu event type: %i\n",
+    //         __func__, event->data.l[0], event->data.l[1], event->data.l[2], event->data.l[3],
+    //         event->data.l[4], event->serial, event->type);
+
+    xevent.xmotion.x_root = event->data.l[0];
+    xevent.xmotion.y_root = event->data.l[1];
+    xevent.xmotion.window = event->window;
+    xevent.xbutton.button = Button1;
+
+    switch (event->data.l[2]) {  // direction
+      case _NET_WM_MOVERESIZE_CANCEL:
+        break;
+      case _NET_WM_MOVERESIZE_MOVE:  // move only - titlebar
+        if (XGrabPointer(dpy, event->window, False,
+                         ButtonMotionMask | ButtonReleaseMask | ButtonPressMask, GrabModeAsync,
+                         GrabModeAsync, None, None, CurrentTime) == GrabSuccess) {
+          wMouseMoveWindow(wwin, &xevent);
+          XUngrabPointer(dpy, CurrentTime);
+          // fprintf(stderr, "%s: _NET_WM_MOVERESIZE_MOVE finished\n", __func__);
+        }
+        break;
+      case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
+      case _NET_WM_MOVERESIZE_SIZE_TOP:
+      case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:
+      case _NET_WM_MOVERESIZE_SIZE_RIGHT:
+      case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:
+      case _NET_WM_MOVERESIZE_SIZE_BOTTOM:
+      case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:
+      case _NET_WM_MOVERESIZE_SIZE_LEFT:
+        if (XGrabPointer(dpy, event->window, False,
+                         ButtonMotionMask | ButtonReleaseMask | ButtonPressMask, GrabModeAsync,
+                         GrabModeAsync, None, None, CurrentTime) == GrabSuccess) {
+          wMouseResizeWindow(wwin, &xevent, 1);
+          XUngrabPointer(dpy, CurrentTime);
+          // fprintf(stderr, "%s: _NET_WM_MOVERESIZE_BOTTOMRIGHT finished\n", __func__);
+        }
+        break;
+    }
+    gettimeofday(&prev_time, NULL);
+    return True;
+  }
+
   return False;
 }
 
@@ -1736,13 +1916,13 @@ void wNETWMCheckClientHintChange(WWindow *wwin, XPropertyEvent *event)
 #endif
 
   if (event->atom == net_wm_strut || event->atom == net_wm_strut_partial) {
-    updateStrut(wwin->screen, wwin->client_win, False);
-    updateStrut(wwin->screen, wwin->client_win, True);
+    _updateStrut(wwin->screen, wwin->client_win, False);
+    _updateStrut(wwin->screen, wwin->client_win, True);
     wScreenUpdateUsableArea(wwin->screen);
   } else if (event->atom == net_wm_handled_icons || event->atom == net_wm_icon_geometry) {
-    updateNetIconInfo(wwin);
+    _updateNetIconInfo(wwin);
   } else if (event->atom == net_wm_window_type) {
-    updateWindowType(wwin);
+    _updateWindowType(wwin);
   } else if (event->atom == net_wm_name) {
     char *name = wNETWMGetWindowName(wwin->client_win);
     wWindowUpdateName(wwin, name);
@@ -1754,9 +1934,9 @@ void wNETWMCheckClientHintChange(WWindow *wwin, XPropertyEvent *event)
       wIconPaint(wwin->icon);
     }
   } else if (event->atom == net_wm_icon) {
-    updateIconImage(wwin);
+    _updateIconImage(wwin);
   } else if (event->atom == net_wm_window_opacity) {
-    updateWindowOpacity(wwin);
+    _updateWindowOpacity(wwin);
   }
   /* else if (event->atom == net_wm_state) { */
   /*   updateIconImage(wwin); */
@@ -1789,7 +1969,7 @@ char *wNETWMGetWindowName(Window window)
   char *ret;
   int size;
 
-  name = (char *)PropGetCheckProperty(window, net_wm_name, utf8_string, 0, 0, &size);
+  name = (char *)wPropertiesGetWindowProperty(window, net_wm_name, utf8_string, 0, 0, &size);
   if (name) {
     ret = wstrndup(name, size);
     XFree(name);
@@ -1806,7 +1986,7 @@ char *wNETWMGetIconName(Window window)
   char *ret;
   int size;
 
-  name = (char *)PropGetCheckProperty(window, net_wm_icon_name, utf8_string, 0, 0, &size);
+  name = (char *)wPropertiesGetWindowProperty(window, net_wm_icon_name, utf8_string, 0, 0, &size);
   if (name) {
     ret = wstrndup(name, size);
     XFree(name);
@@ -1823,7 +2003,7 @@ void wNETRequestFrameExtents(Window window, WScreen *scr)
   GNUstepWMAttributes *gs_attrs;
   Bool has_border = False, has_titlebar = False, has_resizebar = False;
 
-  if (!PropGetGNUstepWMAttr(window, &gs_attrs)) {
+  if (!wPropertiesGetGNUstepWMAttr(window, &gs_attrs)) {
     Atom type_ret;
     int fmt_ret;
     unsigned long nitems_ret, bytes_after_ret;
@@ -1890,70 +2070,4 @@ void wNETFrameExtents(WWindow *wwin)
 void wNETCleanupFrameExtents(WWindow *wwin)
 {
   XDeleteProperty(dpy, wwin->client_win, net_frame_extents);
-}
-
-/*
-  Notifications
-*/
-static void windowObserver(CFNotificationCenterRef center, void *netData, CFNotificationName name,
-                           const void *window, CFDictionaryRef userInfo)
-{
-  WWindow *wwin = (WWindow *)window;
-  NetData *ndata = (NetData *)netData;
-
-  if (!wwin)
-    return;
-
-  if (CFStringCompare(name, WMDidManageWindowNotification, 0) == 0) {
-    updateClientList(wwin->screen);
-    updateClientListStacking(wwin->screen, NULL);
-    updateStateHint(wwin, True, False);
-
-    updateStrut(wwin->screen, wwin->client_win, False);
-    updateStrut(wwin->screen, wwin->client_win, True);
-    wScreenUpdateUsableArea(wwin->screen);
-  } else if (CFStringCompare(name, WMDidUnmanageWindowNotification, 0) == 0) {
-    updateClientList(wwin->screen);
-    updateClientListStacking(wwin->screen, wwin);
-    updateDesktopHint(wwin, False, True);
-    updateStateHint(wwin, False, True);
-    wNETWMUpdateActions(wwin, True);
-
-    updateStrut(wwin->screen, wwin->client_win, False);
-    wScreenUpdateUsableArea(wwin->screen);
-  } else if (CFStringCompare(name, WMDidResetWindowStackingNotification, 0) == 0) {
-    updateClientListStacking(wwin->screen, NULL);
-    updateStateHint(wwin, False, False);
-  } else if (CFStringCompare(name, WMDidChangeWindowStackingNotification, 0) == 0) {
-    updateClientListStacking(wwin->screen, NULL);
-    updateStateHint(wwin, False, False);
-  } else if (CFStringCompare(name, WMDidChangeWindowFocusNotification, 0) == 0) {
-    updateFocusHint(ndata->scr);
-  } else if (CFStringCompare(name, WMDidChangeWindowDesktopNotification, 0) == 0) {
-    updateDesktopHint(wwin, False, False);
-    updateStateHint(wwin, True, False);
-  } else if (CFStringCompare(name, WMDidChangeWindowStateNotification, 0) == 0) {
-    CFStringRef wstate = (CFStringRef)wGetNotificationInfoValue(userInfo, CFSTR("state"));
-    updateStateHint(wwin, !CFStringCompare(wstate, CFSTR("omnipresent"), 0), False);
-  }
-}
-
-static void desktopObserver(CFNotificationCenterRef center, void *netData, CFNotificationName name,
-                            const void *screen, CFDictionaryRef userInfo)
-{
-  WScreen *scr = (WScreen *)screen;
-
-  if (CFStringCompare(name, WMDidCreateDesktopNotification, 0) == 0) {
-    updateDesktopCount(scr);
-    updateDesktopNames(scr);
-    wNETWMUpdateWorkarea(scr);
-  } else if (CFStringCompare(name, WMDidDestroyDesktopNotification, 0) == 0) {
-    updateDesktopCount(scr);
-    updateDesktopNames(scr);
-    wNETWMUpdateWorkarea(scr);
-  } else if (CFStringCompare(name, WMDidChangeDesktopNotification, 0) == 0) {
-    updateCurrentDesktop(scr);
-  } else if (CFStringCompare(name, WMDidChangeDesktopNameNotification, 0) == 0) {
-    updateDesktopNames(scr);
-  }
 }

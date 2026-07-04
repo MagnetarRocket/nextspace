@@ -46,12 +46,12 @@ typedef struct WApplication {
   Window main_window;               /* ID of the group leader */
   struct WWindow *main_wwin;        /* main (leader) window */
   struct WAppIcon *app_icon;
+  WMenu *app_menu;                  /* application menu */
   struct WWindow *last_focused;     /* focused window before hide or switch to other */
   int last_desktop;                 /* last workspace the app used to work on */
   
   CFMutableArrayRef windows;
   struct WWindow *gsmenu_wwin;      /* GNUstep application menu window */
-  WMenu *app_menu;                  /* application menu */
   CFMutableArrayRef menus_state;    /* live menu state info */
 
   CFRunLoopTimerRef urgent_bounce_timer;
@@ -67,6 +67,7 @@ typedef struct WApplication {
 
 void wApplicationAddWindow(WApplication *wapp, struct WWindow *wwin);
 void wApplicationRemoveWindow(WApplication *wapp, struct WWindow *wwin);
+void wApplicationSwitchWindow(struct WWindow *wwin, Bool forward);
 
 WApplication *wApplicationCreate(struct WWindow *wwin);
 WApplication *wApplicationWithName(WScreen *scr, char *app_name);

@@ -9,12 +9,13 @@
 
 @interface AppController : NSObject
 {
-  NSMutableArray *images;
+  NSMutableArray *imageWindows;
 
   Inspector      *inspector;
   PrefController *preferences;
   //Info -> Info Panel
   id infoPanel;
+  NSPopUpButton *saveAsTypes;
 }
 
 + (void)initialize;
@@ -44,4 +45,7 @@
 - (void)setDefaultSize:(id)sender;
 //Info Panel
 - (void)showInfoPanel:(id)sender;
+
+- (void)zoomIn:(id)sender;
+- (void)zoomOut:(id)sender;
 @end

@@ -24,7 +24,16 @@
 
 @interface Calendar : NSView
 {
-  NSImage  *imageWeek, *imageDay, *imageDayB;
+  NSImage *imageWeeks;
+  NSImage *imageWeeksMonday;
+  NSImage *imageDays;
+  NSImage *imageDaysH;
+
+  NSCalendarDate *currentDate;
+  NSUInteger numberOfDaysInMonth;
 }
+
+- (void)setDate:(NSCalendarDate *)date;
+- (NSCalendarDate *)date;
 
 @end

@@ -28,15 +28,16 @@
 
 @interface UserSession : NSObject
 {
-  Controller     *appController;
-  NSDictionary   *appDefaults;
+  Controller *appController;
+  NSDictionary *appDefaults;
   NSMutableArray *sessionScript;
 }
 
-@property (assign)   BOOL      isRunning;
+@property (assign) dispatch_queue_t run_queue;
+@property (assign) BOOL isRunning;
 @property (readonly) NSInteger exitStatus;
-@property (readonly) NSString  *userName;
-@property (readonly) NSString  *sessionLog;
+@property (readonly) NSString *userName;
+@property (readonly) NSString *sessionLog;
 
 // ---
 
@@ -46,9 +47,7 @@
 
 // ---
 
-- (int)launchCommand:(NSArray *)command
-           logAppend:(BOOL)append
-                wait:(BOOL)isWait;
+- (int)launchCommand:(NSArray *)command logAppend:(BOOL)append wait:(BOOL)isWait;
 
 @end
 
@@ -56,4 +55,3 @@
 - (void)readSessionScript;
 - (void)launchSessionScript;
 @end
-

@@ -31,8 +31,8 @@
 //=============================================================================
 
 #import <DesktopKit/DesktopKit.h>
-#import <DesktopKit/NXTDefaults.h>
-#import <DesktopKit/NXTFileManager.h>
+#import <SystemKit/OSEDefaults.h>
+#import <SystemKit/OSEFileManager.h>
 
 #import <Workspace.h>
 
@@ -40,17 +40,18 @@
 #import "math.h"
 
 #import "Controller.h"
-#import "FileViewer.h"
 #import "ModuleLoader.h"
 #import "Inspectors/Inspector.h"
+#import <Finder.h>
 #import "PathIcon.h"
 
-#import <Processes/ProcessManager.h>
 #import <Operations/FileMover.h>
 #import <Operations/Sizer.h>
+#import <Processes/ProcessManager.h>
 
 #import <Preferences/Browser/BrowserPrefs.h>
-#import <Finder.h>
+
+#import "FileViewer.h"
 
 #define NOTIFICATION_CENTER [NSNotificationCenter defaultCenter]
 #define WIN_MIN_HEIGHT 380
@@ -105,7 +106,7 @@
 
 @interface FileViewer (Private)
 - (id)dotDirObjectForKey:(NSString *)key;
-- (void)useViewer:(id<Viewer>)aViewer;
+- (void)useViewerType:(NSString *)viewerType;
 @end
 
 @implementation FileViewer (Private)
@@ -122,21 +123,24 @@
 
   return nil;
 }
-- (void)useViewer:(id<Viewer>)aViewer
-{
-  if (aViewer) {
-    ASSIGN(viewer, aViewer);
 
-    [viewer setOwner:self];
-    [viewer setRootPath:rootPath];
-    [(NSBox *)box setContentView:[viewer view]];
-    [viewer displayPath:displayedPath selection:selection];
+- (void)useViewerType:(NSString *)viewerType
+{
+  if (viewerType) {
+    id<Viewer> newViewer = [[ModuleLoader shared] viewerForType:viewerType];
+    if (newViewer) {
+      [newViewer setOwner:self];
+      [newViewer setRootPath:rootPath];
+      [(NSBox *)box setContentView:[newViewer view]];
+      [newViewer displayPath:displayedPath selection:selection];
+      self.viewer = newViewer;
+    }
   } else {
     // Use this for case when aViewer set to 'nil'
     // to decrease retain count on FileViwer.
     // Example: [self windowWillClose:]
-    [[viewer view] removeFromSuperview];
-    [viewer autorelease];
+    [[self.viewer view] removeFromSuperview];
+    [self.viewer release];
   }
 }
 @end
@@ -144,12 +148,12 @@
 @implementation FileViewer
 
 //=============================================================================
-// Create and destroy
+#pragma mark - Create and destroy
 //=============================================================================
 
 - initRootedAtPath:(NSString *)aRootPath viewer:(NSString *)viewerType isRoot:(BOOL)isRoot
 {
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   NSString *relativePath = nil;
   NSSize aSize;
@@ -171,6 +175,8 @@
     aSize = NSMakeSize(168, PATH_VIEW_HEIGHT);
   }
   [NXTIconView setDefaultSlotSize:aSize];
+
+  processManager = [ProcessManager shared];
 
   // [NSBundle loadNibNamed:@"FileViewer" owner:self];
   // To avoid .gorm loading ineterference manually construct File Viewer window.
@@ -216,7 +222,7 @@
     viewerType = @"Browser";
   }
   // Load the viewer
-  [self useViewer:[[ModuleLoader shared] viewerForType:viewerType]];
+  [self useViewerType:viewerType];
 
   // Resize window to just loaded viewer columns and
   // defined window frame (setFrameAutosaveName, setFrame)
@@ -242,11 +248,11 @@
     // For updating views (Shelf, PathView, Viewer)
     [nc addObserver:self
            selector:@selector(volumeDidMount:)
-               name:NXVolumeMounted
+               name:OSEMediaVolumeDidMountNotification
              object:mediaManager];
     [nc addObserver:self
            selector:@selector(volumeDidUnmount:)
-               name:NXVolumeUnmounted
+               name:OSEMediaVolumeDidUnmountNotification
              object:mediaManager];
   }
 
@@ -309,7 +315,7 @@
   //  NSRect       contentRect = NSMakeRect(100, 500, 522, 390);
   NSRect contentRect = NSMakeRect(100, 500, WIN_DEF_WIDTH, 390);
   NSSize wSize, sSize;
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
 
   // Create window
   if (isRootViewer) {
@@ -340,7 +346,7 @@
   // Disk info label
   // Frame of info labels will be adjusted in 'updateInfoLabels:' later.
   diskInfo = [[NSTextField alloc] initWithFrame:NSMakeRect(8, 312, 231, 12)];
-  [diskInfo setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin | NSViewWidthSizable)];
+  [diskInfo setAutoresizingMask:(NSViewMinYMargin | NSViewWidthSizable)];
   [diskInfo setEnabled:NO];  // not editable, not selectable
   [diskInfo setBezeled:NO];
   [diskInfo setBordered:NO];
@@ -353,7 +359,7 @@
   [diskInfo release];
 
   // Just add label to viewer window. Proccesses will update it.
-  operationInfo = [[ProcessManager shared] backInfoLabel];
+  operationInfo = [processManager backInfoLabel];
   [operationInfo setEditable:NO];
   [operationInfo setSelectable:NO];
   [operationInfo setRefusesFirstResponder:YES];
@@ -380,7 +386,7 @@
   // Path view enclosed into scroll view
   scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 212, SPLIT_DEF_WIDTH, 98)];
   [scrollView setBorderType:NSBezelBorder];
-  [scrollView setAutoresizingMask:(NSViewWidthSizable | NSViewMaxXMargin | NSViewMinYMargin)];
+  [scrollView setAutoresizingMask:(NSViewWidthSizable | NSViewMinYMargin)];
 
   pathView = [[PathView alloc] initWithFrame:NSMakeRect(0, 0, SPLIT_DEF_WIDTH - 4, 98) owner:self];
   [pathView setAutoresizingMask:0];
@@ -409,7 +415,7 @@
   [splitView setDelegate:self];
 
   {
-    NXTDefaults *df = [NXTDefaults userDefaults];
+    OSEDefaults *df = [OSEDefaults userDefaults];
     NSRect shelfFrame = [shelf frame];
     NSRect pathFrame = [[pathView enclosingScrollView] frame];
     NSSize windowMinSize = [window minSize];
@@ -435,6 +441,8 @@
 {
   NSDebugLLog(@"Memory", @"FileViewer %@: dealloc", rootPath);
 
+  [[NSDistributedNotificationCenter notificationCenterForType:NSLocalNotificationCenterType]
+      removeObserver:self];
   [[NSNotificationCenter defaultCenter] removeObserver:self];
 
   // [viewer release];
@@ -446,8 +454,8 @@
 
   // Processes holds list of labels for FileViewers.
   // This message removes local copy of label from Processes' list
-  if ([operationInfo retainCount] > 1) {
-    [[ProcessManager shared] releaseBackInfoLabel:operationInfo];
+  if ([operationInfo retainCount] > 1 && [rootPath isEqualToString:@"/"] == NO) {
+    [processManager releaseBackInfoLabel:operationInfo];
   }
   TEST_RELEASE(lock);
 
@@ -457,7 +465,7 @@
 }
 
 //=============================================================================
-// Accessories
+#pragma mark - Accessories
 //=============================================================================
 
 - (BOOL)isRootViewer
@@ -483,18 +491,13 @@
   return [shelf storableRepresentation];
 }
 
-- (id<Viewer>)viewer
-{
-  return viewer;
-}
-
 - (PathView *)pathView
 {
   return pathView;
 }
 
 //=============================================================================
-// Path manipulations
+#pragma mark - Path manipulations
 //=============================================================================
 // displayedPath - relative path which displayed in PathView and Viewer
 // relativePath == displayedPath == path
@@ -535,7 +538,7 @@
   if ([pathType isEqualToString:NSDirectoryFileType] ||
       [pathType isEqualToString:NSFilesystemFileType]) {
     ASSIGN(displayedPath, [self pathFromAbsolutePath:absolutePath]);
-    ASSIGN(selection, nil);
+    ASSIGN(selection, (id)nil);
   } else {
     // Set file selection ivar
     filename = [absolutePath lastPathComponent];
@@ -591,25 +594,25 @@
   NSEnumerator *e = [relPaths objectEnumerator];
   NSString *relPath;
 
-  //  NSLog(@"[FileViewer] relative paths: %@", relPaths);
+  NSDebugLLog(@"FileViewer", @"[FileViewer] relative paths: %@", relPaths);
 
   while ((relPath = [e nextObject])) {
     [absPaths addObject:[self absolutePathFromPath:relPath]];
   }
 
-  //  NSLog(@"[FileViewer] absolute paths: %@", absPaths);
+  NSDebugLLog(@"FileViewer", @"[FileViewer] absolute paths: %@", absPaths);
 
   return (NSArray *)absPaths;
 }
 
 - (NSArray *)directoryContentsAtPath:(NSString *)relPath forPath:(NSString *)targetPath
 {
-  NXTFileManager *fm = [NXTFileManager defaultManager];
+  OSEFileManager *fm = [OSEFileManager defaultManager];
   NSString *path = [rootPath stringByAppendingPathComponent:relPath];
   NSDictionary *folderDefaults;
 
   // Get sorted directory contents
-  if ((folderDefaults = [[NXTDefaults userDefaults] objectForKey:path]) != nil) {
+  if ((folderDefaults = [[OSEDefaults userDefaults] objectForKey:path]) != nil) {
     sortFilesBy = [[folderDefaults objectForKey:@"SortBy"] intValue];
   } else {
     sortFilesBy = [fm sortFilesBy];
@@ -624,7 +627,7 @@
 }
 
 //=============================================================================
-// Actions
+#pragma mark - Actions
 //=============================================================================
 
 - (NSArray *)checkSelection:(NSArray *)filenames atPath:(NSString *)relativePath
@@ -684,15 +687,15 @@
   while (![fm fileExistsAtPath:fullPath isDirectory:&isDir]) {
     if ([path isEqualToString:@"/"]) {
       if (!isRootViewer) {
-        ASSIGN(*filenames, nil);
-        ASSIGN(*relativePath, nil);
+        DESTROY(*filenames);
+        DESTROY(*relativePath);
         [window close];
       }
       return;
     }
     path = [path stringByDeletingLastPathComponent];
     fullPath = [rootPath stringByAppendingPathComponent:path];
-    ASSIGN(*filenames, nil);
+    DESTROY(*filenames);
     NSDebugLLog(@"FileViewer", @"Stripped down to %@", path);
   }
 
@@ -734,15 +737,15 @@
 
   fullPath = [rootPath stringByAppendingPathComponent:relativePath];
 
-  NSDebugLLog(@"FileViewer", @"displayPath:%@ selection:%@", relativePath, filenames);
+  NSDebugLLog(@"FileViewer", @"[FileViewer] displayPath:%@ selection:%@", relativePath, filenames);
 
   ASSIGN(displayedPath, relativePath);
   ASSIGN(dirContents, [[NSFileManager defaultManager] directoryContentsAtPath:fullPath]);
   ASSIGN(selection, filenames);
 
   // Viewer
-  if (viewer && sender != viewer) {
-    [viewer displayPath:displayedPath selection:selection];
+  if (_viewer && sender != _viewer) {
+    [_viewer displayPath:displayedPath selection:selection];
   }
 
   // Path View
@@ -770,7 +773,7 @@
 
   // FileSystemMonitor
   // TODO:
-  // Even if path is not changed attributes of selected directory may be
+  // Even if path is not changed, attributes of selected directory may be
   // changed. For example, from non-readable to readable.
   if (![oldDisplayedPath isEqualToString:displayedPath]) {
     NSString *pathToMonitor = nil, *pathToUnmonitor = nil;
@@ -837,8 +840,8 @@
   // column width and column count.
   columnWidth = [pathView slotSize].width;
   columnCount = roundf((frame.size.width - WINDOW_INNER_OFFSET) / columnWidth);
-  [viewer setColumnCount:columnCount];
-  [viewer setColumnWidth:columnWidth];
+  [_viewer setColumnCount:columnCount];
+  [_viewer setColumnWidth:columnWidth];
   NSDebugLLog(@"FileViewer", @"[FileViewer updateWindowWidth]: column count: %lu (width = %.0f)",
               columnCount, columnWidth);
 
@@ -883,13 +886,14 @@
   NSString *newFullPath = nil;
   NSString *oldFileName = nil;
 
-  if (selection && [selection count] != 1) {
+  NSDebugLLog(@"FileViewer", @"Rename selection: %@", selection);
+
+  if (selection && [selection count] > 1) {
     [NSException raise:NSInternalInconsistencyException
                 format:@"Attempt to change the "
                        @"filename while multiple files are selected"];
+    return NO;
   }
-
-  //  NSLog(@"Rename selection: %@", selection);
 
   if ([selection count]) {
     // It's a file
@@ -940,7 +944,7 @@
 
   // Leave this for a specific cases when viewer's missed the change.
   if (updateViewer) {
-    [viewer currentSelectionRenamedTo:[self pathFromAbsolutePath:newFullPath]];
+    [_viewer currentSelectionRenamedTo:[self pathFromAbsolutePath:newFullPath]];
   }
 
   return YES;
@@ -986,12 +990,12 @@
 }
 
 //=============================================================================
-// Shelf
+#pragma mark - Shelf
 //=============================================================================
 
 - (void)restoreShelf
 {
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
   NSDictionary *shelfRep = nil;
   NSArray *paths = nil;
   PathIcon *icon = nil;
@@ -1026,7 +1030,7 @@
 }
 
 //=============================================================================
-// Viewer delegate (BrowserViewer, IconViewer, ListViewer, etc.)
+#pragma mark - Viewer delegate (BrowserViewer, IconViewer, ListViewer, etc.)
 //=============================================================================
 
 // Called when viewer contains NXTIcons with editable label (IconViewer)
@@ -1041,7 +1045,7 @@
 }
 
 //=============================================================================
-// Splitview delegate
+#pragma mark - Splitview delegate
 //=============================================================================
 - (void)splitView:(NSSplitView *)sender resizeSubviewsWithOldSize:(NSSize)oldSize
 {
@@ -1082,8 +1086,8 @@
 
   slotSize = [shelf slotSize];
 
-  // NSLog(@"[FileViewer-splitView:constrainSplitPosition] slot height: %0.f",
-  //       slotSize.height);
+  NSDebugLLog(@"FileViewer", @"[FileViewer-splitView:constrainSplitPosition] slot height: %0.f",
+              slotSize.height);
 
   newSlot = rintf(proposedPosition / slotSize.height);
 
@@ -1106,7 +1110,7 @@
 }
 
 //=============================================================================
-// NXTIconLabel delegate
+#pragma mark - NXTIconLabel delegate
 //=============================================================================
 
 // Called by icon in PathView or IconViewer
@@ -1128,16 +1132,16 @@
   // Set attributes of icon
   icon = (PathIcon *)[anIconLabel icon];
   path = [[icon paths] objectAtIndex:0];
-  // NSLog(@"Icon old path: %@", path);
+  NSDebugLLog(@"FileViewer", @"Icon old path: %@", path);
   path = [path stringByDeletingLastPathComponent];
   path = [path stringByAppendingPathComponent:newLabelString];
-  // NSLog(@"Icon new path: %@", path);
+  NSDebugLLog(@"FileViewer", @"Icon new path: %@", path);
   [icon setPaths:[NSArray arrayWithObject:path]];
   NSDebugLLog(@"FileViewer", @"FileViewer(%@): Icon now have paths: %@", rootPath, [icon paths]);
 }
 
 //=============================================================================
-// Window
+#pragma mark - Window
 //=============================================================================
 - (void)_updateFocusInWindow
 {
@@ -1146,7 +1150,15 @@
   if (inspector != nil) {
     [inspector revert:self];
   }
-  [window makeFirstResponder:[viewer keyView]];
+  [window makeFirstResponder:[_viewer keyView]];
+}
+
+- (void)windowDidBecomeMain:(NSNotification *)aNotification
+{
+  if ([window isKeyWindow]) {
+    return;
+  }
+  [self _updateFocusInWindow];
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)aNotification
@@ -1156,7 +1168,7 @@
 
 - (void)windowWillClose:(NSNotification *)notif
 {
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *file = nil;
 
@@ -1181,7 +1193,7 @@
     [[NSApp delegate] getInfoForFile:rootPath application:&appName type:&fileType];
     if (fileType != NSPlainFileType && fileType != NSApplicationFileType) {
       fvdf = [NSMutableDictionary new];
-      [fvdf setObject:[[viewer class] viewerType] forKey:@"ViewerType"];
+      [fvdf setObject:[[_viewer class] viewerType] forKey:@"ViewerType"];
       [fvdf setObject:[displayedPath stringByAppendingPathComponent:file] forKey:@"ViewerPath"];
       [fvdf setObject:NSStringFromRect([window frame]) forKey:@"ViewerWindow"];
       [fvdf setObject:[shelf storableRepresentation] forKey:@"ShelfContents"];
@@ -1191,15 +1203,17 @@
   }
 
   // unset viewer to decrease retain count on FileViewer
-  [self useViewer:nil];
+  [self useViewerType:nil];
+  // AppKit will try to send notifications DidBecomeKey, DidBecomeMain to deallocated window (BUG?)
+  [window setDelegate:nil];
 
   [[NSApp delegate] closeViewer:self];
 }
 
 - (void)windowDidResize:(NSNotification *)notif
 {
-  // NSLog(@"[FileViewer windowDidResize:] viewer column count: %lu",
-  //       [(NSBrowser *)[viewer view] numberOfVisibleColumns]);
+  NSDebugLLog(@"FileViewer", @"[FileViewer windowDidResize:] viewer column count: %lu",
+              [(NSBrowser *)[_viewer view] numberOfVisibleColumns]);
 
   // Update column attributes here.
   // Call to updateWindowWidth: leads to segfault because of active
@@ -1223,7 +1237,7 @@
   unichar c = [[theEvent characters] characterAtIndex:0];
   NSString *string;
 
-  // NSLog(@"[FileViewer] window received key up: %X", c);
+  NSDebugLLog(@"FileViewer", @"[FileViewer] window received key up: %X", c);
 
   switch (c) {
     case '/':
@@ -1238,20 +1252,20 @@
 }
 
 //=============================================================================
-// Notifications
+#pragma mark - Notifications
 //=============================================================================
 - (void)shelfResizableStateChanged:(NSNotification *)notif
 {
   NSInteger rState;
 
-  rState = [[NXTDefaults userDefaults] integerForKey:@"ShelfIsResizable"];
+  rState = [[OSEDefaults userDefaults] integerForKey:@"ShelfIsResizable"];
   [splitView setResizableState:rState];
 }
 
 - (void)browserColumnWidthChanged:(NSNotification *)notif
 {
   [pathView updateSlotSize];
-  [self updateWindowWidth:viewer];
+  [self updateWindowWidth:_viewer];
 }
 
 - (void)updateDiskInfo
@@ -1317,15 +1331,15 @@
   }
 
   NSString *commonPath = NXTIntersectionPath(selectedPath, changedPath);
-  if (([commonPath length] < 1) || ([commonPath length] < [rootPath length])) {
+  if (([commonPath length] < [changedPath length]) || ([commonPath length] < [rootPath length])) {
     // No intersection or changed path is out of our focus.
     return;
   }
 
   operations = [changes objectForKey:@"Operations"];
 
-  // NSLog(@"[FileViewer:%@] OSEFileSystem got filesystem changes %@ at %@",
-  //       [self displayedPath], operations, changedPath);
+  NSDebugLLog(@"FileViewer", @"[FileViewer:%@] OSEFileSystem got filesystem changes %@ at %@",
+              [self displayedPath], operations, changedPath);
 
   // 'selectedPath' contains absolute path with 1 FS object selected
   // 'changedPath' - directory where changes occured
@@ -1347,15 +1361,18 @@
       selectedFullPath = [selectedPath stringByAppendingPathComponent:selectedFile];
     } else {
       selectedFullPath = [NSString stringWithString:selectedPath];
+      [fileSystemMonitor removePath:changedFullPath];
+      [fileSystemMonitor addPath:newFullPath];
     }
 
     // changedFullPath  == "changedPath/changedFile"
     // newFullPath      == "changedPath/changedFileTo"
     // selectedFullPath == "selectedPath/selectedFile"
 
-    // NSLog(@"[FileViewer] OSEFileSystem: 'Rename' "
-    //       @"operation occured for %@(%@). New name %@",
-    //       changedFullPath, selectedFullPath, newFullPath);
+    NSDebugLLog(@"FileViewer",
+                @"[FileViewer] OSEFileSystem: 'Rename' "
+                @"operation occured for %@(%@). New name %@",
+                changedFullPath, selectedFullPath, newFullPath);
 
     commonPath = NXTIntersectionPath(selectedFullPath, changedFullPath);
 
@@ -1366,7 +1383,7 @@
       // Optimization: do not use [self displayPath:selection:sender:] - just
       // set values for particular parts of FileViewer
       [pathView setPath:[self pathFromAbsolutePath:newFullPath] selection:nil];
-      [viewer currentSelectionRenamedTo:[self pathFromAbsolutePath:newFullPath]];
+      [_viewer currentSelectionRenamedTo:[self pathFromAbsolutePath:newFullPath]];
       [self setPathFromAbsolutePath:newFullPath];
       // Update Inspector
       if ([window isMainWindow] == YES) {
@@ -1380,7 +1397,7 @@
       NSDebugLLog(@"FileViewer", @"Selected dir contents changed");
       // Reload column in browser for changed directory contents
       ASSIGN(selection, [self checkSelection:selection atPath:displayedPath]);
-      [viewer reloadPath:displayedPath];
+      [_viewer reloadPath:displayedPath];
     } else if ([commonPath isEqualToString:changedFullPath]) {
       selectedPath = [selectedPath stringByReplacingOccurrencesOfString:commonPath
                                                              withString:newFullPath];
@@ -1392,7 +1409,7 @@
       NSDebugLLog(@"FileViewer", @"One of not selected (but displayed) row name changed");
       // One of not selected (but displayed) row name changed
       // Reload column in browser for changed directory contents
-      [viewer reloadPath:[self pathFromAbsolutePath:changedPath]];
+      [_viewer reloadPath:[self pathFromAbsolutePath:changedPath]];
     }
   } else if (([operations indexOfObject:@"Write"] != NSNotFound)) {
     // Write - monitored object was changed (Create, Delete)
@@ -1404,10 +1421,10 @@
     // Check selection before path will be reloaded
     ASSIGN(selection, [self checkSelection:selection atPath:displayedPath]);
     // Reload changed directory contents without changing path
-    [viewer reloadPath:[self pathFromAbsolutePath:changedPath]];
+    [_viewer reloadPath:[self pathFromAbsolutePath:changedPath]];
 
     // Check existance of path components and update ivars, other views
-    [self displayPath:displayedPath selection:selection sender:viewer];
+    [self displayPath:displayedPath selection:selection sender:_viewer];
   } else if (([operations indexOfObject:@"Attributes"] != NSNotFound)) {
     NSDebugLLog(@"FileViewer",
                 @"[FileViewer] OSEFileSystem: 'Attributes' "
@@ -1422,7 +1439,7 @@
   NSString *changedPath = [aNotif object];
 
   if ([[self absolutePath] isEqualToString:changedPath] == YES) {
-    [viewer reloadPath:[self pathFromAbsolutePath:changedPath]];
+    [_viewer reloadPath:[self pathFromAbsolutePath:changedPath]];
   }
 }
 
@@ -1430,12 +1447,12 @@
 
 - (void)globalUserPreferencesDidChange:(NSNotification *)aNotif
 {
-  NXTFileManager *fm = [NXTFileManager defaultManager];
+  OSEFileManager *fm = [OSEFileManager defaultManager];
   BOOL hidden = [fm isShowHiddenFiles];
   NXTSortType sort = [fm sortFilesBy];
 
   if ((showHiddenFiles != hidden) || (sortFilesBy != sort)) {
-    [viewer displayPath:[self displayedPath] selection:selection];
+    [_viewer displayPath:[self displayedPath] selection:selection];
   }
 
   NSDebugLLog(@"FileViewer", @"[Workspace]: NXGlobalDomain was changed.");
@@ -1450,8 +1467,12 @@
   PathIcon *icon;
   NSString *iconPath;
 
-  // NSLog(@"Volume '%@' did mount at path: %@",
-  //       [[notif userInfo] objectForKey:@"UNIXDevice"], mountPoint);
+  if (mountPoint == nil) {
+    return;
+  }
+
+  NSDebugLLog(@"FileViewer", @"Volume '%@' did mount at path: %@",
+              [[notif userInfo] objectForKey:@"UNIXDevice"], mountPoint);
 
   // Check if mounted removable icon already exist in the Shelf
   for (icon in [shelf icons]) {
@@ -1480,8 +1501,12 @@
   NSString *mountPoint = [[notif userInfo] objectForKey:@"MountPoint"];
   NSString *iconPath;
 
-  // NSLog(@"Volume '%@' mounted at '%@' did unmount",
-  //       [[notif userInfo] objectForKey:@"UNIXDevice"], mountPoint);
+  if (mountPoint == nil) {
+    return;
+  }
+
+  NSDebugLLog(@"FileViewer", @"Volume '%@' mounted at '%@' did unmount",
+              [[notif userInfo] objectForKey:@"UNIXDevice"], mountPoint);
 
   while ((icon = [e nextObject]) != nil) {
     iconPath = [[icon paths] objectAtIndex:0];
@@ -1508,11 +1533,11 @@
 {
   // BGOperation *fop = [notif object];
 
-  // NSLog(@"[FileViewer] %@ object %@", [fop operationType], [fop filename]);
+  // NSDebugLLog(@"FileViewer", @"[FileViewer] %@ object %@", [fop operationType], [fop filename]);
 }
 
 //=============================================================================
-// Dragging
+#pragma mark - Dragging
 //   FileViewer is delegate for PathView (with PathIcon),
 //   ShelfView (with PathIcon).
 //
@@ -1531,11 +1556,12 @@
   NSString *parentPath;
   NSDragOperation mask;
 
+  NSLog(@"draggingSourceOperationMaskForPaths: %@", paths);
   if ([paths count] == 0) {
     return NSDragOperationNone;
   }
 
-  //  NSLog(@"[FileViewer] draggingSourceOperationMaskForPaths: %@", filenames);
+  NSDebugLLog(@"FileViewer", @"[FileViewer] draggingSourceOperationMaskForPaths: %@", paths);
 
   mask = (NSDragOperationCopy | NSDragOperationLink | NSDragOperationMove | NSDragOperationDelete);
 
@@ -1557,11 +1583,12 @@
     }
   }
 
+  NSLog(@"draggingSourceOperationMaskForPaths: %@ - %lu", paths, mask);
   return mask;
 }
 
 //=============================================================================
-// Workspace menu
+#pragma mark - Workspace menu
 //=============================================================================
 
 //--- Menu actions
@@ -1570,20 +1597,71 @@
 - (void)setViewerType:(id)sender
 {
   NSString *viewerType = [sender title];
-  id<Viewer> aViewer;
 
-  if ([[[viewer class] viewerType] isEqualToString:viewerType])
+  if (!viewerType) {
     return;
-
-  aViewer = [[ModuleLoader shared] viewerForType:viewerType];
-
-  if (aViewer != nil) {
-    [self useViewer:aViewer];
-  } else {
-    [NSException raise:NSInternalInconsistencyException
-                format:_(@"Failed to initialize viewer of type %@"), viewerType];
   }
+
+  if ([[[_viewer class] viewerType] isEqualToString:viewerType]) {
+    return;
+  }
+  [self useViewerType:viewerType];
 }
+
+// Edit
+/*
+   Cut, Copy and Paste operations implemented with ProcessManager for several reasons:
+   1. Access to pasteboard is quite slow - validateMenuItem: shows delay (try to detach Edit
+      menu and see delay in close button appearing).
+   2. FileViewer needs to know which files/directories were cut to displlay them grayed out.
+ */
+
+- (void)cut:(id)sender
+{
+  NSString *sourceDir = [self absolutePath];
+  NSArray *objects = selection;
+
+  if (selection == nil) {
+    objects = [NSArray arrayWithObject:[sourceDir lastPathComponent]];
+    sourceDir = [sourceDir stringByDeletingLastPathComponent];
+  }
+
+  [processManager registerEditOperation:MoveOperation
+                          directoryPath:sourceDir
+                                objects:objects];
+}
+
+- (void)copy:(id)sender
+{
+  NSString *sourceDir = [self absolutePath];
+  NSArray *objects = selection;
+
+  if (selection == nil) {
+    objects = [NSArray arrayWithObject:[sourceDir lastPathComponent]];
+    sourceDir = [sourceDir stringByDeletingLastPathComponent];
+  }
+
+  [processManager registerEditOperation:CopyOperation
+                          directoryPath:sourceDir
+                                objects:objects];
+}
+
+- (void)paste:(id)sender
+{
+  NSDictionary *operation = processManager.editOperation;
+  OperationType opType = [operation[EditOperationTypeKey] integerValue];
+
+  NSLog(@"[FileViewer-paste] %@ - %@, opType: %i", operation[EditPathKey],
+        operation[EditObjectsKey], opType);
+
+  // Start operation
+  [processManager startOperationWithType:opType
+                                  source:operation[EditPathKey]
+                                  target:[self absolutePath]
+                                   files:operation[EditObjectsKey]];
+  [processManager unregisterEditOperation];
+}
+
 
 // File
 - (void)open:(id)sender
@@ -1646,10 +1724,9 @@
   NSString *selectedPath = [self absolutePath];
   NSString *newPath;
   PathIcon *selectedIcon = [[pathView icons] lastObject];
-  ;
   NXTIconLabel *label;
 
-  NSDebugLLog(@"FileViewer", @"NF: %@", selectedPath);
+  NSDebugLLog(@"FileViewer", @"[FileViewer] newFolder at: %@", selectedPath);
 
   newPath = [selectedPath stringByAppendingPathComponent:folderName];
   for (idx = 1; [fm fileExistsAtPath:newPath]; idx++) {
@@ -1657,16 +1734,19 @@
     newPath = [selectedPath stringByAppendingPathComponent:folderName];
   }
 
+  [fileSystemMonitor removePath:selectedPath];
+
   if (![fm createDirectoryAtPath:newPath attributes:nil]) {
-    NXTRunAlertPanel(_(@"New Folder"), _(@"Unable to create folder.\n\
-			The selected path is not writable"), nil, nil, nil);
+    NXTRunAlertPanel(_(@"New Folder"),
+                     _(@"Unable to create folder.\nThe selected path is not writable"), nil, nil,
+                     nil);
     return;
   }
 
-  newPath = [self pathFromAbsolutePath:newPath];
+  NSDebugLLog(@"FileViewer", @"[FileViewer] newFolder: %@", newPath);
+  [self displayPath:[self pathFromAbsolutePath:newPath] selection:nil sender:self];
 
-  NSDebugLLog(@"FileViewer", @"NewFolder: %@", newPath);
-  [self displayPath:newPath selection:nil sender:self];
+  // [fileSystemMonitor addPath:newPath];
 
   // Here is new selected icon
   selectedIcon = [[pathView icons] lastObject];
@@ -1679,8 +1759,8 @@
 {
   NSArray *files = nil;
 
-  // NSLog(@"[FileViewer duplicate] path=%@ selection=%@",
-  //       [self absolutePath], selection);
+  NSDebugLLog(@"FileViewer", @"[FileViewer duplicate] path=%@ selection=%@", [self absolutePath],
+              selection);
 
   if ([selection count] > 0) {
     files = selection;
@@ -1690,7 +1770,7 @@
                                  sourceDir:[self absolutePath]
                                  targetDir:nil
                                      files:files
-                                   manager:[ProcessManager shared]];
+                                   manager:processManager];
 }
 
 // TODO
@@ -1724,9 +1804,9 @@
                                  sourceDir:fullPath
                                  targetDir:nil
                                      files:files
-                                   manager:[ProcessManager shared]];
+                                   manager:processManager];
 
-  // NSLog(@"Relative path after destroy: %@", relPath);
+  NSDebugLLog(@"FileViewer", @"Full path after destroy: %@", fullPath);
 }
 
 // Disk
@@ -1801,6 +1881,19 @@
         return NO;
       if ([[menuItem title] isEqualToString:@"Unmount"])
         return NO;
+    }
+  }
+
+  if ([menuTitle isEqualToString:@"Edit"]) {
+    if ([[menuItem title] isEqualToString:@"Cut"]) {
+      // Check if parent directory is writable
+      NSString *parentDirectory = [selectedPath stringByDeletingLastPathComponent];
+      
+      if ([[NSFileManager defaultManager] isWritableFileAtPath:parentDirectory] == NO) {
+        return NO;
+      }
+    } else if ([[menuItem title] isEqualToString:@"Paste"]) {
+      return ([processManager editOperation] != nil);
     }
   }
 

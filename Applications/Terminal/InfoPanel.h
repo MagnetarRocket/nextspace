@@ -21,17 +21,21 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import "TerminalIcon.h"
 
 @interface InfoPanel : NSObject
 {
   id panel;
   id versionField;
   id appIcon;
+
+  TerminalIcon *machView;
+  NSTimer *animationTimer;
+  NSTimer *iconTimer;
 }
 
 - (void)activatePanel;
-- (void)showAnimation;
+- (void)closePanel;
 
 @end

@@ -171,7 +171,7 @@ static CFTypeRef makeWindowState(WWindow *wwin, WApplication *wapp)
   if (!command)
     return NULL;
 
-  if (PropGetWMClass(win, &class, &instance)) {
+  if (wPropertiesGetWMClass(win, &class, &instance)) {
     if (class && instance) {
       name = CFStringCreateWithFormat(kCFAllocatorDefault, 0, CFSTR("%s.%s"), instance, class);
     } else if (instance) {
@@ -442,7 +442,7 @@ void wSessionRestoreState(WScreen *scr)
   WDock *dock;
   WAppIcon *btn = NULL;
   int j, n, found;
-  char *tmp;
+  char *tmp = NULL;
 
   if (!scr->session_state)
     return;
@@ -540,7 +540,7 @@ void wSessionRestoreLastDesktop(WScreen *scr)
 {
   CFStringRef wks;
   int w;
-  const char *value;
+  const char *value = NULL;
 
   if (!scr->session_state)
     return;

@@ -32,28 +32,34 @@
 // Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.
 //
 
-#include <AppKit/AppKit.h>
+#import <AppKit/AppKit.h>
+#import <SystemKit/OSEScreen.h>
 
 @interface NXTAlert : NSObject
 {
-  NSPanel        *panel;
-  NSTextField    *titleField;
-  NSImageView    *icon;
-  NSTextView     *messageView;
-  NSButton       *defaultButton;
-  NSButton       *alternateButton;
-  NSButton       *otherButton;
+  OSEScreen *systemScreen;
+  NSPanel *panel;
 
-  NSString       *titleString;
-  NSString       *messageString;
-  NSString       *defaultString;
-  NSString       *alternateString;
-  NSString       *otherString;
+  NSTextField *titleField;
+  NSImageView *icon;
+  NSTextView *messageView;
+  NSView *accessoryView;
+  NSButton *defaultButton;
+  NSButton *alternateButton;
+  NSButton *otherButton;
+
+  NSString *titleString;
+  NSString *messageString;
+  NSString *defaultString;
+  NSString *alternateString;
+  NSString *otherString;
 
   NSMutableArray *buttons;
-  NSUInteger     maxButtonWidth;
-  NSUInteger     minButtonWidth;
+  NSUInteger maxButtonWidth;
+  NSUInteger minButtonWidth;
 }
+
+@property (assign) id representedObject;
 
 - (id)initWithTitle:(NSString *)titleText
             message:(NSString *)messageText
@@ -68,10 +74,14 @@
      alternateBT:(NSString *)alternateText
          otherBT:(NSString *)otherText;
 
+- (void)setAccessoryView:(NSView *)view;
+
 - (NSPanel *)panel;
 - (void)show;
 - (NSInteger)runModal;
 
+- (void)setButtonsTarget:(id)target;
+- (void)setButtonsAction:(SEL)action;
 - (void)buttonPressed:(id)sender;
 @end
 

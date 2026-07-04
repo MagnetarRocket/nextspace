@@ -36,6 +36,9 @@
 #include "dock.h"
 #include "iconyard.h"
 
+#include "startup.h"
+#include "xmodifier.h"
+
 static CFStringRef WMenuPath = CFSTR("Path");
 static CFStringRef WMenuType = CFSTR("Type");
 static CFStringRef WMenuPositionX = CFSTR("X");
@@ -503,9 +506,12 @@ static WMenu *_createWindowsMenu(WApplication *wapp)
 static void _switchDesktopCallback(WMenu *menu, WMenuItem *entry)
 {
   WWindow *wwin = menu->frame->screen_ptr->focused_window;
+  WApplication *wapp = wApplicationForWindow(wwin);
 
-  wSelectWindow(wwin, False);
-  wWindowChangeDesktop(wwin, entry->index);
+  if (wapp && (wapp == menu->app)) {
+    wSelectWindow(wwin, False);
+    wWindowChangeDesktop(wwin, entry->index);
+  }
 }
 
 static void _updateDesktopsMenu(WMenu *desktops_menu)
@@ -679,12 +685,19 @@ WMenu *wApplicationMenuCreate(WScreen *scr, WApplication *wapp)
 
 void wApplicationMenuDestroy(WApplication *wapp)
 {
-  WMenu *windows_menu = _submenuWithTitle(wapp->app_menu, "Windows");
-  
-  CFNotificationCenterRemoveEveryObserver(wapp->main_wwin->screen->notificationCenter,
-                                          windows_menu);
-  wMenuUnmap(wapp->app_menu);
-  wMenuDestroy(wapp->app_menu, True);
+  if (wapp->app_menu) {
+    WMenu *windows_menu = _submenuWithTitle(wapp->app_menu, "Windows");
+    WMenu *desktops_menu = _submenuWithTitle(windows_menu, "Move Window To");
+
+    CFNotificationCenterRemoveEveryObserver(wapp->main_wwin->screen->notificationCenter,
+                                            windows_menu);
+    CFNotificationCenterRemoveEveryObserver(wapp->main_wwin->screen->notificationCenter,
+                                            desktops_menu);
+    if (!wapp->app_menu->flags.hidden) {
+      wMenuUnmap(wapp->app_menu);
+    }
+    wMenuDestroy(wapp->app_menu, True);
+  }
 }
 
 void wApplicationMenuOpen(WApplication *wapp, int x, int y)
@@ -770,18 +783,6 @@ void wApplicationMenuShow(WMenu *menu)
     wMenuMap(menu);
     menu->flags.hidden = 0;
   }
-}
-
-WMenuItem *wMenuItemWithTitle(WMenu *menu, char *title)
-{
-  WMenuItem **items = menu->items;
-
-  for (int i = 0; i < menu->items_count; i++) {
-    if (!strcmp(items[i]->text, title)) {
-      return items[i];
-    }
-  }
-  return NULL;
 }
 
 // Menu state
@@ -996,6 +997,37 @@ static WMenuItem *_itemForShortcut(WMenu *menu, KeyCode keycode, unsigned int mo
   }
   
   return NULL;
+}
+
+void _setKeyGrabsForMenu(WMenu *menu, WWindow *wwin)
+{
+  WMenuItem *item;
+
+  for (int i = 0; i < menu->items_count; i++) {
+    item = menu->items[i];
+    if (item && item->shortcut && item->shortcut->keycode) {
+      XGrabKey(dpy, item->shortcut->keycode, item->shortcut->modifier, wwin->frame->core->window,
+               True, GrabModeAsync, GrabModeAsync);
+#ifdef NUMLOCK_HACK
+      wHackedGrabKey(item->shortcut->keycode, item->shortcut->modifier, wwin->frame->core->window,
+                     True, GrabModeAsync, GrabModeAsync);
+#endif
+    } else if (item && item->submenu_index >= 0) {
+      _setKeyGrabsForMenu(menu->submenus[item->submenu_index], wwin);
+    }
+  }
+}
+
+void wApplicationMenuSetKeyGrabs(WWindow *wwin)
+{
+  WApplication *wapp;
+
+  if (wwin) {
+    wapp = wApplicationForWindow(wwin);
+    if (wapp && wapp->app_menu) {
+      _setKeyGrabsForMenu(wapp->app_menu, wwin);
+    }
+  }
 }
 
 Bool wApplicationMenuHandleKeyPress(WWindow *focused_window, XEvent *event)

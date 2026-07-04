@@ -61,7 +61,7 @@
 #include "window.h"
 #include "actions.h"
 #include "client.h"
-#include "cycling.h"
+#include "switchpanel.h"
 #include "application.h"
 #include "stacking.h"
 #include "defaults.h"
@@ -84,6 +84,9 @@
 #include "appmenu.h"
 
 #include <Workspace+WM.h>
+
+#pragma mark - Definitions
+
 extern void wIconYardShowIcons(WScreen *screen);
 extern void wIconYardHideIcons(WScreen *screen);
 
@@ -91,215 +94,141 @@ extern void wIconYardHideIcons(WScreen *screen);
 
 /************ Local stuff ***********/
 
-static void saveTimestamp(XEvent *event);
-static void handleColormapNotify(XEvent *event);
-static void handleMapNotify(XEvent *event);
-static void handleUnmapNotify(XEvent *event);
-static void handleButtonPress(XEvent *event);
-static void handleButtonRelease(XEvent *event); /* NEXTSPACE */
-static void handleKeyRelease(XEvent *event);    /* NEXTSPACE */
-static void handleExpose(XEvent *event);
-static void handleDestroyNotify(XEvent *event);
-static void handleConfigureRequest(XEvent *event);
-static void handleMapRequest(XEvent *event);
-static void handlePropertyNotify(XEvent *event);
-static void handleEnterNotify(XEvent *event);
-static void handleLeaveNotify(XEvent *event);
-static void handleExtensions(XEvent *event);
-static void handleClientMessage(XEvent *event);
-static void handleKeyPress(XEvent *event);
-static void handleFocusIn(XEvent *event);
-static void handleMotionNotify(XEvent *event);
-static void handleVisibilityNotify(XEvent *event);
-static void handle_selection_request(XSelectionRequestEvent *event);
-static void handle_selection_clear(XSelectionClearEvent *event);
-static void wdelete_death_handler(WMagicNumber id);
+static void _saveTimestamp(XEvent *event);
+static void _handleColormapNotify(XEvent *event);
+static void _handleMapNotify(XEvent *event);
+static void _handleUnmapNotify(XEvent *event);
+static void _handleButtonPress(XEvent *event);
+static void _handleButtonRelease(XEvent *event); /* NEXTSPACE */
+static void _handleKeyRelease(XEvent *event);    /* NEXTSPACE */
+static void _handleExpose(XEvent *event);
+static void _handleDestroyNotify(XEvent *event);
+static void _handleConfigureRequest(XEvent *event);
+static void _handleMapRequest(XEvent *event);
+static void _handlePropertyNotify(XEvent *event);
+static void _handleEnterNotify(XEvent *event);
+static void _handleLeaveNotify(XEvent *event);
+static void _handleExtensions(XEvent *event);
+static void _handleClientMessage(XEvent *event);
+static void _handleKeyPress(XEvent *event);
+static void _handleFocusIn(XEvent *event);
+static void _handleMotionNotify(XEvent *event);
+static void _handleVisibilityNotify(XEvent *event);
+static void _handleSelectionRequest(XSelectionRequestEvent *event);
+static void _handleSelectionClear(XSelectionClearEvent *event);
 
 #ifdef USE_XSHAPE
-static void handleShapeNotify(XEvent *event);
+static void _handleShapeNotify(XEvent *event);
 #endif
 
 #ifdef USE_XKB
-static void handleXkbBellNotify(XkbEvent *event);
-static void handleXkbStateNotify(XkbEvent *event);
+static void _handleXkbBellNotify(XkbEvent *event);
+static void _handleXkbStateNotify(XkbEvent *event);
 #endif
 
+#pragma mark - Processes
+
 /* real dead process handler */
-static void handleDeadProcess(void);
+static void _handleApplicationProcess(void);
+static void _deleteExitHandler(WMagicNumber id);
 
-typedef struct DeadProcesses {
-  pid_t pid;
-  unsigned char exit_status;
-} DeadProcesses;
-
-/* stack of dead processes */
-static DeadProcesses deadProcesses[MAX_DEAD_PROCESSES];
-static int deadProcessPtr = 0;
-
-typedef struct DeathHandler {
-  WDeathHandler *callback;
+typedef struct ExitHandler {
+  WExitHandler *callback;
   pid_t pid;
   void *client_data;
-} DeathHandler;
+} AppExitHandler;
 
-static CFMutableArrayRef deathHandlers = NULL;
+static CFMutableArrayRef appExitHandlers = NULL;
 
-WMagicNumber wAddDeathHandler(pid_t pid, WDeathHandler *callback, void *cdata)
+WMagicNumber wAddExitHandler(pid_t pid, WExitHandler *callback, void *cdata)
 {
-  DeathHandler *handler;
+  AppExitHandler *handler = NULL;
 
-  handler = malloc(sizeof(DeathHandler));
-  if (!handler)
-    return 0;
+  if (!appExitHandlers) {
+    appExitHandlers = CFArrayCreateMutable(kCFAllocatorDefault, 8, NULL);
+  } else {
+    for (int i = CFArrayGetCount(appExitHandlers) - 1; i >= 0; i--) {
+      handler = (AppExitHandler *)CFArrayGetValueAtIndex(appExitHandlers, i);
+      if (handler->pid == pid) {
+        break;
+      } else {
+        handler = NULL;
+      }
+    }
+  }
 
-  handler->pid = pid;
-  handler->callback = callback;
-  handler->client_data = cdata;
+  if (handler == NULL) {
+    // CFLog(kCFLogLevelInfo, CFSTR("%s: PID == %i"), __func__, pid);
 
-  if (!deathHandlers)
-    deathHandlers = CFArrayCreateMutable(kCFAllocatorDefault, 8, NULL);
+    handler = malloc(sizeof(AppExitHandler));
+    if (!handler) {
+      return 0;
+    }
+    handler->pid = pid;
+    handler->callback = callback;
+    handler->client_data = cdata;
 
-  CFArrayAppendValue(deathHandlers, handler);
+    CFArrayAppendValue(appExitHandlers, handler);
+  }
 
   return handler;
 }
 
-static void wdelete_death_handler(WMagicNumber id)
+static void _deleteExitHandler(WMagicNumber id)
 {
-  DeathHandler *handler = (DeathHandler *)id;
+  AppExitHandler *handler = (AppExitHandler *)id;
   CFIndex idx;
 
-  if (!handler || !deathHandlers)
+  if (!handler || !appExitHandlers)
     return;
 
-  idx = CFArrayGetFirstIndexOfValue(deathHandlers, CFRangeMake(0, CFArrayGetCount(deathHandlers)),
+  idx = CFArrayGetFirstIndexOfValue(appExitHandlers, CFRangeMake(0, CFArrayGetCount(appExitHandlers)),
                                     handler);
   if (idx != kCFNotFound) {
-    CFArrayRemoveValueAtIndex(deathHandlers, idx);
+    CFArrayRemoveValueAtIndex(appExitHandlers, idx);
     free(handler);
   }
 }
 
-void DispatchEvent(XEvent *event)
+void wNotifyProcessExit(pid_t pid, int status)
 {
-  if (deathHandlers)
-    handleDeadProcess();
+  AppExitHandler *tmp;
 
-  if (WCHECK_STATE(WSTATE_NEED_EXIT) || WCHECK_STATE(WSTATE_EXITING)) {
-    /* WCHANGE_STATE(WSTATE_EXITING); */
-    /* WMHandleEvent() can't be called from anything
-     * executed inside here, or we can get in a infinite
-     * recursive loop. */
+  // CFLog(kCFLogLevelInfo, CFSTR("%s: PID == %i, exit status == %i"), __func__, pid,
+  //       WEXITSTATUS(status));
+  if (!appExitHandlers) {
     return;
-  } else if (WCHECK_STATE(WSTATE_NEED_RESTART)) {
-    WCHANGE_STATE(WSTATE_RESTARTING);
-    return;
-    /* wShutdown(WMRestartMode); */
-  } else if (WCHECK_STATE(WSTATE_NEED_REREAD)) {
-    WCHANGE_STATE(WSTATE_NORMAL);
-    wDefaultsUpdateDomainsIfNeeded(NULL);
   }
 
-  /* for the case that all that is wanted to be dispatched is
-   * the stuff above */
-  if (!event)
-    return;
-
-  saveTimestamp(event);
-  switch (event->type) {
-    case MapRequest:
-      handleMapRequest(event);
-      break;
-
-    case KeyPress:
-      handleKeyPress(event);
-      break;
-
-    case KeyRelease:
-      handleKeyRelease(event);
-      break;
-
-    case MotionNotify:
-      handleMotionNotify(event);
-      break;
-
-    case ConfigureRequest:
-      handleConfigureRequest(event);
-      break;
-
-    case DestroyNotify:
-      handleDestroyNotify(event);
-      break;
-
-    case MapNotify:
-      handleMapNotify(event);
-      break;
-
-    case UnmapNotify:
-      handleUnmapNotify(event);
-      break;
-
-    case ButtonPress:
-      handleButtonPress(event);
-      break;
-
-    case Expose:
-      handleExpose(event);
-      break;
-
-    case ButtonRelease:
-      handleButtonRelease(event);
-      break;
-
-    case PropertyNotify:
-      handlePropertyNotify(event);
-      break;
-
-    case EnterNotify:
-      handleEnterNotify(event);
-      break;
-
-    case LeaveNotify:
-      handleLeaveNotify(event);
-      break;
-
-    case ClientMessage:
-      handleClientMessage(event);
-      break;
-
-    case ColormapNotify:
-      handleColormapNotify(event);
-      break;
-
-    case MappingNotify:
-      if (event->xmapping.request == MappingKeyboard || event->xmapping.request == MappingModifier)
-        XRefreshKeyboardMapping(&event->xmapping);
-      break;
-
-    case FocusIn:
-      handleFocusIn(event);
-      break;
-
-    case VisibilityNotify:
-      handleVisibilityNotify(event);
-      break;
-
-    case ConfigureNotify:
-      break;
-
-    case SelectionRequest:
-      handle_selection_request(&event->xselectionrequest);
-      break;
-
-    case SelectionClear:
-      handle_selection_clear(&event->xselectionclear);
-      break;
-
-    default:
-      handleExtensions(event);
-      break;
+  for (int i = CFArrayGetCount(appExitHandlers) - 1; i >= 0; i--) {
+    tmp = (AppExitHandler *)CFArrayGetValueAtIndex(appExitHandlers, i);
+    if (tmp && tmp->pid == pid) {
+      (*tmp->callback)(tmp->pid, WEXITSTATUS(status), tmp->client_data);
+      _deleteExitHandler(tmp);
+    }
   }
 }
+
+static void _handleApplicationProcess(void)
+{
+  AppExitHandler *tmp;
+
+  if (!appExitHandlers) {
+    return;
+  }
+
+  // Check for other processes which have registered death handlers.
+  for (int i = CFArrayGetCount(appExitHandlers) - 1; i >= 0; i--) {
+    tmp = (AppExitHandler *)CFArrayGetValueAtIndex(appExitHandlers, i);
+    // CFLog(kCFLogLevelInfo, CFSTR("%s: check if process %i exists."), __func__, tmp->pid);
+    if (tmp && (kill(tmp->pid, 0) != 0)) {
+      (*tmp->callback)(tmp->pid, 0, tmp->client_data);
+      _deleteExitHandler(tmp);
+    }
+  }
+}
+
+#pragma mark - Run loop
 
 static void _runLoopHandleEvent(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info)
 {
@@ -367,26 +296,126 @@ void WMRunLoop_V1()
   WMLogError("V1: CFRunLoop finished.");
 }
 
-/*
- *----------------------------------------------------------------------
- * EventLoop-
- * 	Processes X and internal events indefinitely.
- *
- * Returns:
- * 	Never returns
- *
- * Side effects:
- * 	The LastTimestamp global variable is updated.
- *      Calls inotifyGetEvents if defaults database changes.
- *----------------------------------------------------------------------
- */
-noreturn void EventLoop(void)
-{
-  XEvent event;
+#pragma mark - Events handling
 
-  for (;;) {
-    WMNextEvent(dpy, &event); /* Blocks here */
-    WMHandleEvent(&event);
+void DispatchEvent(XEvent *event)
+{
+  if (appExitHandlers)
+    _handleApplicationProcess();
+
+  if (WCHECK_STATE(WSTATE_NEED_EXIT) || WCHECK_STATE(WSTATE_EXITING)) {
+    /* WCHANGE_STATE(WSTATE_EXITING); */
+    /* WMHandleEvent() can't be called from anything
+     * executed inside here, or we can get in a infinite
+     * recursive loop. */
+    return;
+  } else if (WCHECK_STATE(WSTATE_NEED_RESTART)) {
+    WCHANGE_STATE(WSTATE_RESTARTING);
+    return;
+    /* wShutdown(WMRestartMode); */
+  } else if (WCHECK_STATE(WSTATE_NEED_REREAD)) {
+    WCHANGE_STATE(WSTATE_NORMAL);
+    wDefaultsUpdateDomainsIfNeeded(NULL);
+  }
+
+  /* for the case that all that is wanted to be dispatched is
+   * the stuff above */
+  if (!event)
+    return;
+
+  _saveTimestamp(event);
+  switch (event->type) {
+    case MapRequest:
+      _handleMapRequest(event);
+      break;
+
+    case KeyPress:
+      _handleKeyPress(event);
+      break;
+
+    case KeyRelease:
+      _handleKeyRelease(event);
+      break;
+
+    case MotionNotify:
+      _handleMotionNotify(event);
+      break;
+
+    case ConfigureRequest:
+      _handleConfigureRequest(event);
+      break;
+
+    case DestroyNotify:
+      _handleDestroyNotify(event);
+      break;
+
+    case MapNotify:
+      _handleMapNotify(event);
+      break;
+
+    case UnmapNotify:
+      _handleUnmapNotify(event);
+      break;
+
+    case ButtonPress:
+      _handleButtonPress(event);
+      break;
+
+    case Expose:
+      _handleExpose(event);
+      break;
+
+    case ButtonRelease:
+      _handleButtonRelease(event);
+      break;
+
+    case PropertyNotify:
+      _handlePropertyNotify(event);
+      break;
+
+    case EnterNotify:
+      _handleEnterNotify(event);
+      break;
+
+    case LeaveNotify:
+      _handleLeaveNotify(event);
+      break;
+
+    case ClientMessage:
+      _handleClientMessage(event);
+      break;
+
+    case ColormapNotify:
+      _handleColormapNotify(event);
+      break;
+
+    case MappingNotify:
+      if (event->xmapping.request == MappingKeyboard || event->xmapping.request == MappingModifier)
+        XRefreshKeyboardMapping(&event->xmapping);
+      break;
+
+    case FocusIn:
+      _handleFocusIn(event);
+      break;
+
+    case VisibilityNotify:
+      _handleVisibilityNotify(event);
+      break;
+
+    case ConfigureNotify:
+      break;
+
+    case SelectionRequest:
+      _handleSelectionRequest(&event->xselectionrequest);
+      break;
+
+    case SelectionClear:
+      _handleSelectionClear(&event->xselectionclear);
+      break;
+
+    default:
+      _handleExtensions(event);
+      break;
   }
 }
 
@@ -423,7 +452,7 @@ void ProcessPendingEvents(void)
   }
 }
 
-Bool IsDoubleClick(WScreen *scr, XEvent *event)
+Bool wEventIsDoubleClick(WScreen *scr, XEvent *event)
 {
   if ((scr->last_click_time > 0) &&
       (event->xbutton.time - scr->last_click_time <= wPreferences.dblclick_time) &&
@@ -438,51 +467,7 @@ Bool IsDoubleClick(WScreen *scr, XEvent *event)
   return False;
 }
 
-void NotifyDeadProcess(pid_t pid, unsigned char status)
-{
-  if (deadProcessPtr >= MAX_DEAD_PROCESSES - 1) {
-    WMLogWarning("stack overflow: too many dead processes");
-    return;
-  }
-  /* stack the process to be handled later,
-   * as this is called from the signal handler */
-  deadProcesses[deadProcessPtr].pid = pid;
-  deadProcesses[deadProcessPtr].exit_status = status;
-  deadProcessPtr++;
-}
-
-static void handleDeadProcess(void)
-{
-  DeathHandler *tmp;
-  int i;
-
-  for (i = 0; i < deadProcessPtr; i++) {
-    wWindowDeleteSavedStatesForPID(deadProcesses[i].pid);
-  }
-
-  if (!deathHandlers) {
-    deadProcessPtr = 0;
-    return;
-  }
-
-  /* get the pids on the queue and call handlers */
-  while (deadProcessPtr > 0) {
-    deadProcessPtr--;
-
-    for (i = CFArrayGetCount(deathHandlers) - 1; i >= 0; i--) {
-      tmp = (DeathHandler *)CFArrayGetValueAtIndex(deathHandlers, i);
-      if (!tmp)
-        continue;
-
-      if (tmp->pid == deadProcesses[deadProcessPtr].pid) {
-        (*tmp->callback)(tmp->pid, deadProcesses[deadProcessPtr].exit_status, tmp->client_data);
-        wdelete_death_handler(tmp);
-      }
-    }
-  }
-}
-
-static void saveTimestamp(XEvent *event)
+static void _saveTimestamp(XEvent *event)
 {
   /*
    * Never save CurrentTime as LastTimestamp because CurrentTime
@@ -523,27 +508,27 @@ static void saveTimestamp(XEvent *event)
   }
 }
 
-static void handleExtensions(XEvent *event)
+static void _handleExtensions(XEvent *event)
 {
 #ifdef USE_XSHAPE
   if (w_global.xext.shape.supported &&
       event->type == (w_global.xext.shape.event_base + ShapeNotify)) {
-    handleShapeNotify(event);
+    _handleShapeNotify(event);
   }
 #endif
 #ifdef USE_XKB
   if (w_global.xext.xkb.supported && (event->type == w_global.xext.xkb.event_base)) {
     XkbEvent *e = (XkbEvent *)event;
     if (e->any.xkb_type == XkbBellNotify) {
-      handleXkbBellNotify(e);
+      _handleXkbBellNotify(e);
     } else if (e->any.xkb_type == XkbStateNotify) {
-      handleXkbStateNotify(e);
+      _handleXkbStateNotify(e);
     }
   }
 #endif /* USE_XKB */
 }
 
-static void handleMapRequest(XEvent *ev)
+static void _handleMapRequest(XEvent *ev)
 {
   WWindow *wwin;
   WScreen *scr = NULL;
@@ -633,7 +618,7 @@ static void handleMapRequest(XEvent *ev)
   }
 }
 
-static void handleDestroyNotify(XEvent *event)
+static void _handleDestroyNotify(XEvent *event)
 {
   WWindow *wwin;
   WApplication *app;
@@ -690,7 +675,7 @@ static void handleDestroyNotify(XEvent *event)
   }
 }
 
-static void handleExpose(XEvent *event)
+static void _handleExpose(XEvent *event)
 {
   WObjDescriptor *desc;
   XEvent ev;
@@ -708,7 +693,7 @@ static void handleExpose(XEvent *event)
   }
 }
 
-static void executeWheelAction(WScreen *scr, XEvent *event, int action)
+static void _executeWheelAction(WScreen *scr, XEvent *event, int action)
 {
   WWindow *wwin;
   Bool next_direction;
@@ -736,7 +721,7 @@ static void executeWheelAction(WScreen *scr, XEvent *event, int action)
   }
 }
 
-static void executeButtonAction(WScreen *scr, XEvent *event, int action)
+static void _executeButtonAction(WScreen *scr, XEvent *event, int action)
 {
   WWindow *wwin;
 
@@ -772,7 +757,7 @@ static void executeButtonAction(WScreen *scr, XEvent *event, int action)
 }
 
 /* bindable */
-static void handleButtonPress(XEvent *event)
+static void _handleButtonPress(XEvent *event)
 {
   WObjDescriptor *desc = NULL;
   WScreen *scr = wDefaultScreen();
@@ -799,7 +784,7 @@ static void handleButtonPress(XEvent *event)
         XSendEvent(dpy, scr->dock->icon_array[0]->icon->icon_win, False, ButtonPressMask, event);
       }
     } else if (event->xbutton.button == Button2 && wPreferences.mouse_button2 != WA_NONE) {
-      executeButtonAction(scr, event, wPreferences.mouse_button2);
+      _executeButtonAction(scr, event, wPreferences.mouse_button2);
     } else if (event->xbutton.button == Button3 && wPreferences.mouse_button3 != WA_NONE) {
       if (scr->focused_window) {
         wapp = wApplicationForWindow(scr->focused_window);
@@ -812,17 +797,17 @@ static void handleButtonPress(XEvent *event)
         XSendEvent(dpy, scr->dock->icon_array[0]->icon->icon_win, False, ButtonPressMask, event);
       }
     } else if (event->xbutton.button == Button4 && wPreferences.mouse_wheel_scroll != WA_NONE) {
-      executeWheelAction(scr, event, wPreferences.mouse_wheel_scroll);
+      _executeWheelAction(scr, event, wPreferences.mouse_wheel_scroll);
     } else if (event->xbutton.button == Button5 && wPreferences.mouse_wheel_scroll != WA_NONE) {
-      executeWheelAction(scr, event, wPreferences.mouse_wheel_scroll);
+      _executeWheelAction(scr, event, wPreferences.mouse_wheel_scroll);
     } else if (event->xbutton.button == Button6 && wPreferences.mouse_wheel_tilt != WA_NONE) {
-      executeWheelAction(scr, event, wPreferences.mouse_wheel_tilt);
+      _executeWheelAction(scr, event, wPreferences.mouse_wheel_tilt);
     } else if (event->xbutton.button == Button7 && wPreferences.mouse_wheel_tilt != WA_NONE) {
-      executeWheelAction(scr, event, wPreferences.mouse_wheel_tilt);
+      _executeWheelAction(scr, event, wPreferences.mouse_wheel_tilt);
     } else if (event->xbutton.button == Button8 && wPreferences.mouse_button8 != WA_NONE) {
-      executeButtonAction(scr, event, wPreferences.mouse_button8);
+      _executeButtonAction(scr, event, wPreferences.mouse_button8);
     } else if (event->xbutton.button == Button9 && wPreferences.mouse_button9 != WA_NONE) {
-      executeButtonAction(scr, event, wPreferences.mouse_button9);
+      _executeButtonAction(scr, event, wPreferences.mouse_button9);
     }
   }
 
@@ -883,7 +868,7 @@ static void handleButtonPress(XEvent *event)
   }
 }
 
-static void handleButtonRelease(XEvent *event)
+static void _handleButtonRelease(XEvent *event)
 {
   WScreen *scr = wDefaultScreen();
 
@@ -897,7 +882,7 @@ static void handleButtonRelease(XEvent *event)
   }
 }
 
-static void handleMapNotify(XEvent *event)
+static void _handleMapNotify(XEvent *event)
 {
   WWindow *wwin;
 
@@ -915,7 +900,7 @@ static void handleMapNotify(XEvent *event)
   }
 }
 
-static void handleUnmapNotify(XEvent *event)
+static void _handleUnmapNotify(XEvent *event)
 {
   WWindow *wwin;
   XEvent ev;
@@ -969,7 +954,7 @@ static void handleUnmapNotify(XEvent *event)
   }
 }
 
-static void handleConfigureRequest(XEvent *event)
+static void _handleConfigureRequest(XEvent *event)
 {
   WWindow *wwin;
 
@@ -984,7 +969,7 @@ static void handleConfigureRequest(XEvent *event)
   }
 }
 
-static void handlePropertyNotify(XEvent *event)
+static void _handlePropertyNotify(XEvent *event)
 {
   WWindow *wwin;
   WApplication *wapp;
@@ -1005,7 +990,7 @@ static void handlePropertyNotify(XEvent *event)
   }
 }
 
-static void handleClientMessage(XEvent *event)
+static void _handleClientMessage(XEvent *event)
 {
   WWindow *wwin;
   WObjDescriptor *desc;
@@ -1039,10 +1024,10 @@ static void handleClientMessage(XEvent *event)
     strncpy(command, event->xclient.data.b, sizeof(event->xclient.data.b));
 
     if (strncmp(command, "Reconfigure", sizeof("Reconfigure")) == 0) {
-      WMLogWarning(_("Got Reconfigure command"));
+      WMLogWarning("Got Reconfigure command");
       wDefaultsUpdateDomainsIfNeeded(NULL);
     } else {
-      WMLogWarning(_("Got unknown command %s"), command);
+      WMLogWarning("Got unknown command %s", command);
     }
 
     wfree(command);
@@ -1145,7 +1130,7 @@ static void handleClientMessage(XEvent *event)
   }
 }
 
-static void handleEnterNotify(XEvent *event)
+static void _handleEnterNotify(XEvent *event)
 {
   WWindow *wwin;
   WObjDescriptor *desc = NULL;
@@ -1154,7 +1139,7 @@ static void handleEnterNotify(XEvent *event)
 
   if (XCheckTypedWindowEvent(dpy, event->xcrossing.window, LeaveNotify, &ev)) {
     /* already left the window... */
-    saveTimestamp(&ev);
+    _saveTimestamp(&ev);
     if (ev.xcrossing.mode == event->xcrossing.mode &&
         ev.xcrossing.detail == event->xcrossing.detail) {
       return;
@@ -1200,7 +1185,7 @@ static void handleEnterNotify(XEvent *event)
   }
 }
 
-static void handleLeaveNotify(XEvent *event)
+static void _handleLeaveNotify(XEvent *event)
 {
   WObjDescriptor *desc = NULL;
 
@@ -1212,7 +1197,7 @@ static void handleLeaveNotify(XEvent *event)
 }
 
 #ifdef USE_XSHAPE
-static void handleShapeNotify(XEvent *event)
+static void _handleShapeNotify(XEvent *event)
 {
   XShapeEvent *shev = (XShapeEvent *)event;
   WWindow *wwin;
@@ -1248,7 +1233,7 @@ static void handleShapeNotify(XEvent *event)
 #endif /* USE_XSHAPE */
 
 #ifdef USE_XKB
-static void handleXkbBellNotify(XkbEvent *event)
+static void _handleXkbBellNotify(XkbEvent *event)
 {
   WWindow *wwin;
   WScreen *scr;
@@ -1259,7 +1244,7 @@ static void handleXkbBellNotify(XkbEvent *event)
     WSRingBell(wwin);
   }
 }
-static void handleXkbStateNotify(XkbEvent *event)
+static void _handleXkbStateNotify(XkbEvent *event)
 {
   WWindow *wwin;
   WScreen *scr;
@@ -1284,7 +1269,7 @@ static void handleXkbStateNotify(XkbEvent *event)
 }
 #endif /* USE_XKB */
 
-static void handleColormapNotify(XEvent *event)
+static void _handleColormapNotify(XEvent *event)
 {
   WWindow *wwin;
   WScreen *scr;
@@ -1329,7 +1314,7 @@ static void handleColormapNotify(XEvent *event)
   }
 }
 
-static void handleFocusIn(XEvent *event)
+static void _handleFocusIn(XEvent *event)
 {
   WWindow *wwin;
 
@@ -1338,7 +1323,7 @@ static void handleFocusIn(XEvent *event)
    */
   while (XCheckTypedEvent(dpy, FocusIn, event))
     ;
-  saveTimestamp(event);
+  _saveTimestamp(event);
   if (event->xfocus.mode == NotifyUngrab || event->xfocus.mode == NotifyGrab ||
       event->xfocus.detail > NotifyNonlinearVirtual) {
     return;
@@ -1359,26 +1344,26 @@ static void handleFocusIn(XEvent *event)
   }
 }
 
-static WWindow *windowUnderPointer(WScreen *scr)
-{
-  unsigned int mask;
-  int foo;
-  Window bar, win;
+// static WWindow *windowUnderPointer(WScreen *scr)
+// {
+//   unsigned int mask;
+//   int foo;
+//   Window bar, win;
 
-  if (XQueryPointer(dpy, scr->root_win, &bar, &win, &foo, &foo, &foo, &foo, &mask))
-    return wWindowFor(win);
-  return NULL;
-}
+//   if (XQueryPointer(dpy, scr->root_win, &bar, &win, &foo, &foo, &foo, &foo, &mask))
+//     return wWindowFor(win);
+//   return NULL;
+// }
 
-static int CheckFullScreenWindowFocused(WScreen *scr)
-{
-  if (scr->focused_window && scr->focused_window->flags.fullscreen)
-    return 1;
-  else
-    return 0;
-}
+// static int CheckFullScreenWindowFocused(WScreen *scr)
+// {
+//   if (scr->focused_window && scr->focused_window->flags.fullscreen)
+//     return 1;
+//   else
+//     return 0;
+// }
 
-static void handleKeyPress(XEvent *event)
+static void _handleKeyPress(XEvent *event)
 {
   WScreen *scr = wDefaultScreen();
   WWindow *wwin = scr->focused_window;
@@ -1389,22 +1374,24 @@ static void handleKeyPress(XEvent *event)
   /* ignore CapsLock */
   modifiers = event->xkey.state & w_global.shortcut.modifiers_mask;
 
-  WMLogInfo("handleKeyPress: %i state: %i modifiers: %i", event->xkey.keycode, event->xkey.state,
-            modifiers);
+  // WMLogInfo("handleKeyPress: %i state: %i modifiers: %i", event->xkey.keycode, event->xkey.state,
+  //           modifiers);
+  fprintf(stderr, "handleKeyPress: %i state: %i modifiers: %i\n", event->xkey.keycode,
+          event->xkey.state, modifiers);
 
   /* Handle Alternate button press to change miniaturize button image at titlebar */
-  if (((event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_L)) ||
-       (event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_R))) &&
-      modifiers == 0) {
-    if (wwin &&
-        wwin->client_win /* != scr->no_focus_win && event->xkey.window != event->xkey.root */) {
-      scr->flags.modifier_pressed = 1;
-      wWindowUpdateButtonImages(wwin);
-    }
-  } else if (event->xkey.window != event->xkey.root && event->xkey.window != scr->no_focus_win) {
-    scr->flags.modifier_pressed = 0;
-    wWindowUpdateButtonImages(wwin);
-  }
+  // if (((event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_L)) ||
+  //      (event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_R))) &&
+  //     modifiers == 0) {
+  //   if (wwin &&
+  //       wwin->client_win /* != scr->no_focus_win && event->xkey.window != event->xkey.root */) {
+  //     scr->flags.modifier_pressed = 1;
+  //     wWindowUpdateButtonImages(wwin);
+  //   }
+  // } else if (event->xkey.window != event->xkey.root && event->xkey.window != scr->no_focus_win) {
+  //   scr->flags.modifier_pressed = 0;
+  //   wWindowUpdateButtonImages(wwin);
+  // }
 
   /* Pass key press to application menu of non-GNUstep applications.
      If application menu has such shortcut function returns `True` */
@@ -1444,7 +1431,7 @@ static void handleKeyPress(XEvent *event)
     // send it to GNUstep application. For example, Alternate-x
     // pressed over Terminal window which runs Emacs should result in
     // appearing 'M-x' prompt in Emacs.
-    if (wwin && wwin->flags.is_gnustep) {
+    if (wwin) {
       XSendEvent(dpy, wwin->client_win, True, KeyPress, event);
     }
     return;
@@ -1454,18 +1441,18 @@ static void handleKeyPress(XEvent *event)
 #define ISFOCUSED(w) ((w) && (w)->flags.focused)
 
   switch (command) {
-      /* case WKBD_RAISE: */
-      /*   if (ISMAPPED(wwin) && ISFOCUSED(wwin)) { */
-      /*     CloseWindowMenu(scr); */
-      /*     wRaiseFrame(wwin->frame->core); */
-      /*   } */
-      /*   break; */
-      /* case WKBD_LOWER: */
-      /*   if (ISMAPPED(wwin) && ISFOCUSED(wwin)) { */
-      /*     CloseWindowMenu(scr); */
-      /*     wLowerFrame(wwin->frame->core); */
-      /*   } */
-      /*   break; */
+    case WKBD_RAISE:
+      if (ISMAPPED(wwin) && ISFOCUSED(wwin)) {
+        // CloseWindowMenu(scr);
+        wRaiseFrame(wwin->frame->core);
+      }
+      break;
+    case WKBD_LOWER:
+      if (ISMAPPED(wwin) && ISFOCUSED(wwin)) {
+        // CloseWindowMenu(scr);
+        wLowerFrame(wwin->frame->core);
+      }
+      break;
 
       /* Dock and Icon Yard */
       /* case WKBD_DOCKHIDESHOW: */
@@ -1496,17 +1483,17 @@ static void handleKeyPress(XEvent *event)
       /*   break; */
 
       /* Desktops navigation */
-    case WKBD_FOCUSNEXT:
-      StartWindozeCycle(wwin, event, True, False);
+    case WKBD_NEXT_APP:
+      wSwitchPanelStart(wwin, event, True);
       break;
-    case WKBD_FOCUSPREV:
-      StartWindozeCycle(wwin, event, False, False);
+    case WKBD_PREV_APP:
+      wSwitchPanelStart(wwin, event, False);
       break;
-    case WKBD_GROUPNEXT:
-      StartWindozeCycle(wwin, event, True, True);
+    case WKBD_NEXT_WIN:
+      wApplicationSwitchWindow(wwin, True);
       break;
-    case WKBD_GROUPPREV:
-      StartWindozeCycle(wwin, event, False, True);
+    case WKBD_PREV_WIN:
+      wApplicationSwitchWindow(wwin, False);
       break;
 
     case WKBD_NEXT_DESKTOP:
@@ -1534,7 +1521,7 @@ static void handleKeyPress(XEvent *event)
 }
 
 // NEXTSPACE
-static void handleKeyRelease(XEvent *event)
+static void _handleKeyRelease(XEvent *event)
 {
   WScreen *scr = wDefaultScreen();
   WWindow *wwin = scr->focused_window;
@@ -1542,21 +1529,25 @@ static void handleKeyRelease(XEvent *event)
   if (event->xkey.window == event->xkey.root || event->xkey.window == scr->no_focus_win) {
     return;
   }
+  if (wwin) {
+    scr->flags.modifier_pressed = 0;
+    XSendEvent(dpy, wwin->client_win, True, KeyRelease, event);
+  }
   /* WMLogInfo("handleKeyRelease: %i state: %i mask: %i", */
   /*         event->xkey.keycode, event->xkey.state, MOD_MASK); */
-  if ((event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_L)) ||
-      (event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_R))) {
-    if (wwin) {
-      scr->flags.modifier_pressed = 0;
-      wWindowUpdateButtonImages(wwin);
-      if (wwin->flags.is_gnustep) {
-        XSendEvent(dpy, scr->focused_window->client_win, True, KeyRelease, event);
-      }
-    }
-  }
+  // if ((event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_L)) ||
+  //     (event->xkey.keycode == XKeysymToKeycode(dpy, XK_Super_R))) {
+  //   if (wwin) {
+  //     scr->flags.modifier_pressed = 0;
+  //     wWindowUpdateButtonImages(wwin);
+  //     // if (wwin->flags.is_gnustep) {
+  //       XSendEvent(dpy, scr->focused_window->client_win, True, KeyRelease, event);
+  //     // }
+  //   }
+  // }
 }
 
-static void handleMotionNotify(XEvent *event)
+static void _handleMotionNotify(XEvent *event)
 {
   WWindow *wwin = wWindowFor(event->xmotion.window);
 
@@ -1572,14 +1563,14 @@ static void handleMotionNotify(XEvent *event)
         /* move the window */
         wMouseMoveWindow(wwin, event);
       } else if (IS_RESIZABLE(wwin) && event->xmotion.window == wwin->frame->resizebar->window) {
-        wMouseResizeWindow(wwin, event);
+        wMouseResizeWindow(wwin, event, wPreferences.opaque_resize);
       }
       XUngrabPointer(dpy, CurrentTime);
     }
   }
 }
 
-static void handleVisibilityNotify(XEvent *event)
+static void _handleVisibilityNotify(XEvent *event)
 {
   WWindow *wwin;
 
@@ -1589,7 +1580,7 @@ static void handleVisibilityNotify(XEvent *event)
   wwin->flags.obscured = (event->xvisibility.state == VisibilityFullyObscured);
 }
 
-static void handle_selection_request(XSelectionRequestEvent *event)
+static void _handleSelectionRequest(XSelectionRequestEvent *event)
 {
 #ifdef USE_ICCCM_WMREPLACE
   static Atom atom_version = None;
@@ -1663,7 +1654,7 @@ not_our_selection:
 #endif
 }
 
-static void handle_selection_clear(XSelectionClearEvent *event)
+static void _handleSelectionClear(XSelectionClearEvent *event)
 {
 #ifdef USE_ICCCM_WMREPLACE
   WScreen *scr = wScreenForWindow(event->window);

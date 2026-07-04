@@ -1,12 +1,17 @@
-#/bin/bash
+#!/bin/sh
 
-yum remove nextspace* -y
-yum remove libwraster* -y
-yum remove libobjc2* -y
-yum remove libcorefoundation* -y
-yum remove libdispatch* -y
-/bin/rm -rf /usr/NextSpace
-/bin/rm -rf /usr/share/plymouth/themes/nextspace
-/bin/rm -rf /Applications
-/bin/rm -rf /Developer
-/bin/rm -rf /Library
+clear
+echo -e -n "\e[1m"
+echo "==============================================================================="
+echo "This script will REMOVE NextSpace"
+echo "==============================================================================="
+echo -e -n "\e[33m"
+echo -n "Do you want to continue? [y/N]: "
+echo -e -n "\e[0m"
+read YN
+if [ "$YN" != "y" ]; then
+    echo "Great! I hope you enjoy using NextSpace."
+    exit
+fi
+
+sudo yum -y remove nextspace\* libwraster\* libobjc2\* libcorefoundation\* libdispatch\*

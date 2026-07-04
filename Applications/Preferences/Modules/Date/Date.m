@@ -35,6 +35,8 @@
   imagePath = [bundle pathForResource:@"Date" ofType:@"tiff"];
   image = [[NSImage alloc] initWithContentsOfFile:imagePath];
 
+  defaults = [OSEDefaults globalUserDefaults];
+
   return self;
 }
 
@@ -44,7 +46,7 @@
   [image release];
 
   if (view) {
-   [view release];
+    [view release];
   }
 
   [super dealloc];
@@ -52,21 +54,45 @@
 
 - (void)awakeFromNib
 {
+  NSDictionary *cvdisplayRects;
+  NSCalendarDate *nowDate = [NSCalendarDate now];
+
   [view retain];
   [window release];
+
+  // Clock view
+  cvdisplayRects = @{
+    @"DayOfWeek" : NSStringFromRect(NSMakeRect(14, 33, 33, 6)),
+    @"Day" : NSStringFromRect(NSMakeRect(14, 15, 33, 17)),
+    @"Month" : NSStringFromRect(NSMakeRect(14, 9, 31, 6)),
+    @"Time" : NSStringFromRect(NSMakeRect(5, 46, 53, 11))
+  };
+  [clockView setTileImage:[NSImage imageNamed:@"ClockViewTile"]];
+  [clockView setDisplayRects:cvdisplayRects];
+  [clockView setYearVisible:NO];
+  [clockView setCalendarDate:nowDate];
+
+  [hour24Button setIntValue:[clockView is24HourFormat] ? 1 : 0];
+
+  [timeField
+      setStringValue:[NSString stringWithFormat:@"%lu:%lu:%lu", nowDate.hourOfDay,
+                                                nowDate.minuteOfHour, nowDate.secondOfMinute]];
+  [monthField setStringValue:[nowDate descriptionWithCalendarFormat:@"%B"]];
+  [yearField setStringValue:[nowDate descriptionWithCalendarFormat:@"%Y"]];
+
+  [calendarView setDate:nowDate];
 }
 
 - (NSView *)view
 {
   if (view == nil) {
-      if (![NSBundle loadNibNamed:@"Date" owner:self]) {
-         NSLog (@"Date.preferences: Could not load NIB, aborting.");
-         return nil;
-      }
+    if (![NSBundle loadNibNamed:@"Date" owner:self]) {
+      NSLog(@"Date.preferences: Could not load NIB, aborting.");
+      return nil;
+    }
   }
   return view;
 }
-
 
 - (NSString *)buttonCaption
 {
@@ -78,39 +104,40 @@
   return image;
 }
 
-- (void) changeHourTypeAction: (id) sender
+- (void)change24Hour:(id)sender
 {
+  BOOL flag = [sender integerValue] ? YES : NO;
 
-};
+  [defaults setBool:flag forKey:NXTClockView24HourFormat];
+}
 
-- (void) increaseFieldAction: (id) sender
+- (void)changeCalendarDate:(id)sender
 {
+  NSCalendarDate *now = [calendarView date];
+  NSCalendarDate *then;
 
-};
+  switch ([sender tag]) {
+    case 0:
+      then = [now dateByAddingYears:0 months:-1 days:0 hours:0 minutes:0 seconds:0];
+      break;
+    case 1:
+      then = [now dateByAddingYears:-1 months:0 days:0 hours:0 minutes:0 seconds:0];
+      break;
+    case 2:
+      then = [now dateByAddingYears:0 months:1 days:0 hours:0 minutes:0 seconds:0];
+      break;
+    case 3:
+      then = [now dateByAddingYears:1 months:0 days:0 hours:0 minutes:0 seconds:0];
+      break;
+  }
+  
+  [monthField setStringValue:[then descriptionWithCalendarFormat:@"%B"]];
+  [yearField setStringValue:[then descriptionWithCalendarFormat:@"%Y"]];
+  [calendarView setDate:then];
+}
 
-- (void) decreaseFieldAction: (id) sender
+- (void)selectRegionAction:(id)sender
 {
-
-};
-
-- (void) changeClockFaceAction: (id) sender
-{
-
-};
-
-- (void) selectRegionAction: (id) sender
-{
-
-};
-
-- (void) setTimeAction: (id) sender
-{
-
-};
-
-- (void) timeManuallyChangedAction: (id) sender
-{
-
-};
+}
 
 @end

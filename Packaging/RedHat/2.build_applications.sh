@@ -3,18 +3,14 @@
 # run this script as has appropriate rights.
 #
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit
-fi
+prepare_redhat_environment || error_exit "Failed to setup building environment. Exiting..."
 
-prepare_environment
-
-REPO_DIR=$1
 LOG_FILE=/dev/null
-SPEC_FILE=${REPO_DIR}/Applications/nextspace-applications.spec
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/nextspace-applications.spec
 
 print_H1 " Building NEXTSPACE Applications package..."
 
@@ -24,27 +20,24 @@ DEPS=`rpmspec -q --buildrequires ${SPEC_FILE} | awk -c '{print $1}'`
 sudo yum -y install ${DEPS} 2>&1 > ${LOG_FILE}
 print_H2 "===== Downloading nextspace-frameworks sources..."
 source /Developer/Makefiles/GNUstep.sh
-if [ $OS_ID == "centos" ] && [ $OS_VERSION == "7" ];then
-    source /opt/rh/llvm-toolset-7.0/enable
-fi
 
 print_H2 "--- Prepare Workspace sources"
-cd ${REPO_DIR}/Applications/Workspace
+cd ${PROJECT_DIR}/Applications/Workspace
 #rm WM/src/wconfig.h && rm WM/configure && ./WM.configure
 
 print_H2 "--- Creating applications source tarball"
-cd ${REPO_DIR}/Applications && make dist
+cd ${PROJECT_DIR}/Applications && make dist
 cd $CWD
-mv ${REPO_DIR}/nextspace-applications-${APPLICATIONS_VERSION}.tar.gz ${SOURCES_DIR}
+mv ${PROJECT_DIR}/nextspace-applications-${APPLICATIONS_VERSION}.tar.gz ${RPM_SOURCES_DIR}
 spectool -g -R ${SPEC_FILE}
 
 print_H2 "===== Building nextspace-applications package..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
     print_OK " Building of NEXTSPACE Applications RPM SUCCEEDED!"
     print_H2 "===== Installing nextspace-applications RPMs..."
-    APPLICATIONS_VERSION=`rpm_version ${SPEC_FILE}`
+    APPLICATIONS_VERSION=`rpm_version ${SPEC_FILE} "$@"`
 
     install_rpm nextspace-applications ${RPMS_DIR}/nextspace-applications-${APPLICATIONS_VERSION}.rpm
     mv ${RPMS_DIR}/nextspace-applications-${APPLICATIONS_VERSION}.rpm ${RELEASE_USR}

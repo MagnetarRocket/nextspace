@@ -91,22 +91,21 @@ typedef enum {
 
 @interface ProcessManager : NSObject
 {
-  // Array of objects which represents active operations (BGOperation).
-  NSMutableArray *operations;
-  NSMutableArray *applications;
-
   NSMutableArray *backInfoLabelCopies;
 }
 
+  // Array of objects which represents active operations (BGOperation).
+@property (readonly) NSMutableArray *applications;
+@property (readonly) NSMutableArray *operations;
+
 @property (readonly) NSDictionary *activeApplication;
+// Operation introduced by "Edit" menu (Cut, Copy)
+@property (readonly) NSDictionary *editOperation;
 
 + shared;
 
 - (id)init;
 - (void)dealloc;
-
-- (NSArray *)applications;
-- (NSArray *)operations;
 
 @end
 
@@ -145,5 +144,19 @@ typedef enum {
 - (id)backInfoLabel;
 - (void)releaseBackInfoLabel:(id)label;
 - (void)updateBackInfoLabel;
+
+@end
+
+extern NSString *EditOperationTypeKey;
+extern NSString *EditPathKey;
+extern NSString *EditObjectsKey;
+
+@interface ProcessManager (EditOperations)
+
+// Operation type could be either CopyOperation (Edit->Copy) or MoveOperation (Edit->Cut)
+- (BOOL)registerEditOperation:(OperationType)opType
+                directoryPath:(NSString *)dir
+                      objects:(NSArray *)objects;
+- (void)unregisterEditOperation;
 
 @end

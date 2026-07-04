@@ -28,59 +28,71 @@
 
 - (void)activatePanel
 {
-  if (panel == nil)
-    {
-      if (![NSBundle loadNibNamed:@"Info" owner:self])
-        {
-         NSLog (@"Failed to load Info.gorm");
-         return;
-        }
-       [panel center];
+  if (panel == nil) {
+    if (![NSBundle loadNibNamed:@"Info" owner:self]) {
+      NSLog(@"Failed to load Info.gorm");
+      return;
     }
+    [panel center];
+  }
   [panel makeKeyAndOrderFront:self];
-  // [NSTimer scheduledTimerWithTimeInterval:2.0
-  //                                  target:self
-  //                                selector:@selector(showAnimation)
-  //                                userInfo:nil
-  //                                 repeats:YES];
+
+  if (iconTimer == nil) {
+    iconTimer = [NSTimer scheduledTimerWithTimeInterval:5.0
+                                                 target:self
+                                               selector:@selector(animateAppIcon)
+                                               userInfo:nil
+                                                repeats:YES];
+  }
+}
+
+- (void)closePanel
+{
+  if (iconTimer && [iconTimer isValid]) {
+    [iconTimer invalidate];
+  }
+  [panel close];
+  [panel release];
 }
 
 - (void)awakeFromNib
 {
+  NSString *scrImagePath = [[NSBundle mainBundle] pathForResource:@"ScrollingMach" ofType:@"tiff"];
+
   [versionField setStringValue:@"0.98"];
+
+  machView = [[TerminalIcon alloc] initWithFrame:[appIcon frame]
+                                  scrollingFrame:NSMakeRect(13, 17, 27, 23)];
+  [machView setImageScaling:NSScaleNone];
+  machView.iconImage = [NSApp applicationIconImage];
+  machView.scrollingImage = [[NSImage alloc] initWithContentsOfFile:scrImagePath];
+  [[panel contentView] replaceSubview:appIcon with:machView];
+  [machView release];
 }
 
 - (void)dealloc
 {
+  [animationTimer invalidate];
   [super dealloc];
 }
 
-- (void)showAnimation
+- (void)animateAppIcon
 {
-  NSString *mPath = [[NSBundle mainBundle]
-                                   pathForResource:@"ScrollingMach"
-                                            ofType:@"tiff"];
-  NSImage *scrollingMach = [[NSImage alloc] initWithContentsOfFile:mPath];
-  NSImageView *machView;
-
-  machView = [[NSImageView alloc] initWithFrame:NSMakeRect(0,0,27,25)];
-  [machView setImageScaling:NSScaleNone];
-  [machView setImage:[scrollingMach autorelease]];
-  [[panel contentView] addSubview:machView];
-  [machView release];
-
-  for (int i = 0; i < 10; i++)
-    {
-      [machView lockFocus];
-      [scrollingMach compositeToPoint:NSMakePoint(0, 0)
-                             fromRect:NSMakeRect(0, i, 27, 25)
-                            operation:NSCompositeSourceOver];
-      [machView unlockFocus];
-      // [machView scrollRectToVisible:NSMakeRect(0, i, 27, 25)];
-      // [machView setNeedsDisplay:YES];
-    }
-
-  // [[panel contentView] removeSubview:machView];
+  if ([panel isVisible] == NO) {
+    machView.isAnimates = NO;
+    [iconTimer invalidate];
+    iconTimer = nil;
+  }
+  machView.isAnimates = YES;
+  if (animationTimer == nil) {
+    animationTimer = [NSTimer timerWithTimeInterval:0.1
+                                             target:machView
+                                           selector:@selector(animate)
+                                           userInfo:nil
+                                            repeats:YES];
+    [[NSRunLoop currentRunLoop] addTimer:animationTimer forMode:NSDefaultRunLoopMode];
+  }
+  [animationTimer fire];
 }
 
 @end

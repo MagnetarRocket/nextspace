@@ -30,8 +30,9 @@
 #import <AppKit/NSMatrix.h>
 #import <AppKit/NSSlider.h>
 
-#import <DesktopKit/NXTDefaults.h>
+#import <SystemKit/OSEDefaults.h>
 #import <DesktopKit/NXTNumericField.h>
+#import <DesktopKit/NXTCountdownAlert.h>
 
 #import <SystemKit/OSEScreen.h>
 #import <SystemKit/OSEDisplay.h>
@@ -43,32 +44,41 @@
 
 @implementation DisplayPrefs
 
+//
+#pragma mark - Init & protocol
+//
+
 - (id)init
 {
   NSBundle *bundle;
   NSString *imagePath;
-  
+
   self = [super init];
-  
+
   bundle = [NSBundle bundleForClass:[self class]];
   imagePath = [bundle pathForResource:@"Monitor" ofType:@"tiff"];
   image = [[NSImage alloc] initWithContentsOfFile:imagePath];
-  
+
+  lastGoodResolution = [NSMutableDictionary new];
+
   return self;
 }
 
 - (void)dealloc
 {
   NSLog(@"DisplayPrefs -dealloc");
-  
+
   [[NSNotificationCenter defaultCenter] removeObserver:self];
-  
+  [[NSDistributedNotificationCenter notificationCenterForType:GSPublicNotificationCenterType] removeObserver:self];
+
   [image release];
 
-  if (view) [view release];
-  if (systemScreen) [systemScreen release];
-  if (saveConfigTimer) [saveConfigTimer release];
-  
+  [view release];
+  [systemScreen release];
+  if (saveConfigTimer) {
+    [saveConfigTimer release];
+  }
+  [lastGoodResolution release];
   [super dealloc];
 }
 
@@ -77,7 +87,8 @@
   [view retain];
   [window release];
 
-  systemScreen = [OSEScreen new];
+  systemScreen = [OSEScreen sharedScreen];
+  [systemScreen retain];
   [systemScreen setUseAutosave:YES];
 
   // Setup NXNumericField float constraints
@@ -89,44 +100,40 @@
   // Setup NXNumericField integer constraints
   [brightnessField setMinimumValue:0.5];
   [brightnessField setMaximumValue:100.0];
-  
+
   [monitorsList loadColumnZero];
   [self selectFirstEnabledMonitor];
-  
+
   [rotationBtn setEnabled:NO];
   [reflectionBtn setEnabled:NO];
 
   // Desktop background
   CGFloat red, green, blue;
-  if ([systemScreen backgroundColorRed:&red green:&green blue:&blue] == YES)
-    {
-      desktopBackground = [NSColor colorWithDeviceRed:red
-                                                green:green
-                                                 blue:blue
-                                                alpha:1.0];
-      [colorBtn setColor:desktopBackground];
-      [systemScreen setBackgroundColorRed:red
-                                    green:green
-                                     blue:blue];
-    }
+  if ([systemScreen backgroundColorRed:&red green:&green blue:&blue] == YES) {
+    desktopBackground = [NSColor colorWithDeviceRed:red green:green blue:blue alpha:1.0];
+    [colorBtn setColor:desktopBackground];
+    [systemScreen setBackgroundColorRed:red green:green blue:blue];
+  }
 
-  [[NSNotificationCenter defaultCenter]
-    addObserver:self
-       selector:@selector(screenDidUpdate:)
-           name:OSEScreenDidUpdateNotification
-         object:systemScreen];
+  [[NSNotificationCenter defaultCenter] addObserver:self
+                                           selector:@selector(screenDidUpdate:)
+                                               name:OSEScreenDidUpdateNotification
+                                             object:systemScreen];
+  [[NSDistributedNotificationCenter notificationCenterForType:GSPublicNotificationCenterType]
+      addObserver:self
+         selector:@selector(screenDidChange:)
+             name:OSEScreenDidChangeNotification
+           object:nil];
 }
 
 - (NSView *)view
 {
-  if (view == nil)
-    {
-      if (![NSBundle loadNibNamed:@"Display" owner:self])
-        {
-          NSLog (@"Display.preferences: Could not load NIB, aborting.");
-          return nil;
-        }
+  if (view == nil) {
+    if (![NSBundle loadNibNamed:@"Display" owner:self]) {
+      NSLog(@"Display.preferences: Could not load NIB, aborting.");
+      return nil;
     }
+  }
 
   return view;
 }
@@ -142,60 +149,95 @@
 }
 
 //
-// Helper methods
+#pragma mark - Helper methods
 //
 - (void)fillRateButton
 {
-  NSString     *resBtnTitle = [resolutionBtn titleOfSelectedItem];
-  NSArray      *m = [selectedDisplay allResolutions];
-  NSString     *rateString;
+  NSString *resBtnTitle;
+  NSString *rateTitle;
+  NSString *resolutionTitle;
   NSDictionary *res;
-  NSString     *resTitle;
-  NSSize       size;
+  double rateValue = 0.0;
+  NSString *rateFormat = @"%.2f Hz";
 
   [rateBtn removeAllItems];
-  for (NSInteger i = 0; i < [m count]; i++)
-    {
-      res = [m objectAtIndex:i];
-      size = NSSizeFromString([res objectForKey:@"Size"]);
-      resTitle = [NSString stringWithFormat:@"%.0fx%.0f",
-                           size.width, size.height];
-      if ([resTitle isEqualToString:resBtnTitle])
-        {
-          rateString = [NSString stringWithFormat:@"%.1f Hz",
-                               [[res objectForKey:@"Rate"] floatValue]];
-          [rateBtn addItemWithTitle:rateString];
-          [[rateBtn itemWithTitle:rateString] setRepresentedObject:res];
-        }
-    }
 
-  [rateBtn setEnabled:([[rateBtn itemArray] count] == 1) ? NO : YES];
+  // Fill the buttion with items
+  resBtnTitle = [resolutionBtn titleOfSelectedItem];
+  for (res in [selectedDisplay allResolutions]) {
+    resolutionTitle = [res objectForKey:OSEDisplayResolutionNameKey];
+    if ([resolutionTitle isEqualToString:resBtnTitle]) {
+      rateValue = [[res objectForKey:OSEDisplayResolutionRateKey] doubleValue];
+      rateTitle = [NSString stringWithFormat:rateFormat, rateValue];
+      [rateBtn addItemWithTitle:rateTitle];
+      [[rateBtn itemWithTitle:rateTitle] setRepresentedObject:res];
+    }
+  }
+}
+
+- (void)updateRateButton
+{
+  NSString *rateTitle;
+
+  if ([[rateBtn itemArray] count] == 1) {
+    [rateBtn setEnabled:NO];
+  } else {
+    rateTitle = [NSString stringWithFormat:@"%.2f Hz", selectedDisplay.activeRate];
+    [rateBtn selectItemWithTitle:rateTitle];
+    [rateBtn setEnabled:YES];
+  }  
 }
 
 - (void)setResolution
 {
+  NSDictionary *activeResolution;
+  // NSString *resolutionTitle;
+  NSDictionary *targetResolution = [[rateBtn selectedCell] representedObject];
+  NSString *targetResolutionTitle = nil;
+  NSString *lastGoodResolutionTitle = nil;
+
+  if (targetResolution == nil) {
+    NSLog(@"%s - resolution dictionary is nil! Resolution button is %@", __func__,
+          [resolutionBtn title]);
+    return;
+  }
+
+  targetResolutionTitle = [targetResolution objectForKey:OSEDisplayResolutionNameKey];
+  if (lastGoodResolution) {
+    lastGoodResolutionTitle = [lastGoodResolution objectForKey:OSEDisplayResolutionNameKey];
+  }
+  if (lastGoodResolution && [lastGoodResolutionTitle isEqualToString:targetResolutionTitle] &&
+      [lastGoodResolution objectForKey:OSEDisplayResolutionRateKey] ==
+          [targetResolution objectForKey:OSEDisplayResolutionRateKey]) {
+    return;
+  }
+
+  // Save current resolution
+  // activeResolution = [selectedDisplay activeResolution];
+  // NSLog(@"%s: saving last good resolution - %@", __func__,
+  //       [activeResolution objectForKey:OSEDisplayResolutionNameKey]);
+  // [lastGoodResolution setObject:[selectedDisplay activeResolution]
+  //                        forKey:[selectedDisplay outputName]];
+
   // Set resolution only to active display.
   // Display activating implemented in 'Screen' Preferences' module.
-  if ([selectedDisplay isActive])
-    {
-      [systemScreen setDisplay:selectedDisplay
-                    resolution:[[rateBtn selectedCell] representedObject]];
-    }
+  if ([selectedDisplay isActive]) {
+    // NSLog(@"%s - %@", __func__, [[rateBtn selectedCell] representedObject]);
+    [systemScreen setDisplay:selectedDisplay resolution:[[rateBtn selectedCell] representedObject]];
+  }
 }
 
 - (void)selectFirstEnabledMonitor
 {
   NSArray *cells = [[monitorsList matrixInColumn:0] cells];
 
-  for (int i = 0; i < [cells count]; i++)
-    {
-      if ([[cells objectAtIndex:i] isEnabled] == YES)
-        {
-          [monitorsList selectRow:i inColumn:0];
-          break;
-        }
+  for (int i = 0; i < [cells count]; i++) {
+    if ([[cells objectAtIndex:i] isEnabled] == YES) {
+      [monitorsList selectRow:i inColumn:0];
+      break;
     }
-  
+  }
+
   [self monitorsListClicked:monitorsList];
 }
 
@@ -206,87 +248,81 @@
 }
 
 //
-// Action methods
+#pragma mark - Action methods
 //
 - (IBAction)monitorsListClicked:(id)sender
 {
-  NSArray      *m;
-  NSSize       size;
-  NSString     *resolution;
-  NSDictionary *r;
+  NSString *resolutionTitle;
+  NSDictionary *activeResolution;
 
+  // Check if really new selection was made
   selectedDisplay = [[sender selectedCell] representedObject];
-  m = [selectedDisplay allResolutions];
-  // NSLog(@"Display.preferences: selected monitor with title: %@", mName);
+  if (selectedDisplayName &&
+      [selectedDisplayName isEqualToString:[selectedDisplay outputName]] != NO) {
+    return;
+  }
+  selectedDisplayName = [selectedDisplay outputName];
+  // if (selectedDisplay == nil) {
+  //   selectedDisplay = [[sender selectedCell] representedObject];
+  //   selectedDisplayName = [selectedDisplay outputName];
+  //   [lastGoodResolution setObject:[selectedDisplay activeResolution] forKey:selectedDisplayName];
+  // } else {
+  //   selectedDisplay = [[sender selectedCell] representedObject];
+  //   if ([selectedDisplayName isEqualToString:[selectedDisplay outputName]] == NO) {
+  //     selectedDisplayName = [selectedDisplay outputName];
+  //     [lastGoodResolution setObject:[selectedDisplay activeResolution] forKey:selectedDisplayName];
+  //   }
+  // }
+  NSLog(@"%s: selected monitor with title: %@", __func__, [selectedDisplay outputName]);
 
   // Resolution
   [resolutionBtn removeAllItems];
-  for (NSDictionary *res in m)
-    {
-      size = NSSizeFromString([res objectForKey:@"Size"]);
-      resolution = [NSString stringWithFormat:@"%.0fx%.0f",
-                             size.width, size.height];
-      [resolutionBtn addItemWithTitle:resolution];
-    }
-  r = [selectedDisplay activeResolution];
-  size = NSSizeFromString([r objectForKey:@"Size"]);
-  resolution = [NSString stringWithFormat:@"%.0fx%.0f",
-                         size.width, size.height];
-  [resolutionBtn selectItemWithTitle:resolution];
-  // Rate button filled here. Items tagged with resolution description
-  // object in [NSDisplay allModes] array
+  for (NSDictionary *res in [selectedDisplay allResolutions]) {
+    resolutionTitle = [res objectForKey:OSEDisplayResolutionNameKey];
+    [resolutionBtn addItemWithTitle:resolutionTitle];
+  }
+  activeResolution = [selectedDisplay activeResolution];
+  resolutionTitle = [activeResolution objectForKey:OSEDisplayResolutionNameKey];
+  [resolutionBtn selectItemWithTitle:resolutionTitle];
+  [lastGoodResolution setObject:activeResolution forKey:selectedDisplayName];
+  NSLog(@"%s: last good reolution: %@", __func__, resolutionTitle);
+
+  // Rate button filled here. Items tagged with resolution description object
   [self fillRateButton];
+  [self updateRateButton];
 
-  if ([selectedDisplay isGammaSupported] == YES)
-    {
-      [gammaSlider setEnabled:YES];
-      [gammaField setEnabled:YES];
-      [brightnessSlider setEnabled:YES];
-      [brightnessField setEnabled:YES];
-      // Contrast
-      NSString *gammaString = [NSString stringWithFormat:@"%.2f",
-                                        [selectedDisplay gamma]];
-      [gammaSlider setFloatValue:[gammaString floatValue]];
-      [gammaField setStringValue:gammaString];
+  if ([selectedDisplay isGammaSupported] == YES) {
+    [gammaSlider setEnabled:YES];
+    [gammaField setEnabled:YES];
+    [brightnessSlider setEnabled:YES];
+    [brightnessField setEnabled:YES];
+    // Contrast
+    NSString *gammaString = [NSString stringWithFormat:@"%.2f", [selectedDisplay gamma]];
+    [gammaSlider setFloatValue:[gammaString floatValue]];
+    [gammaField setStringValue:gammaString];
 
-      // Brightness
-      CGFloat brightness = [selectedDisplay gammaBrightness];
-      [brightnessSlider setFloatValue:brightness * 100];
-      [brightnessField
-        setStringValue:[NSString stringWithFormat:@"%.0f", brightness * 100]];
-    }
-  else
-    {
-      [gammaSlider setEnabled:NO];
-      [gammaField setEnabled:NO];
-      [brightnessSlider setEnabled:NO];
-      [brightnessField setEnabled:NO];
-    }
+    // Brightness
+    CGFloat brightness = [selectedDisplay gammaBrightness];
+    [brightnessSlider setFloatValue:brightness * 100];
+    [brightnessField setStringValue:[NSString stringWithFormat:@"%.0f", brightness * 100]];
+  } else {
+    [gammaSlider setEnabled:NO];
+    [gammaField setEnabled:NO];
+    [brightnessSlider setEnabled:NO];
+    [brightnessField setEnabled:NO];
+  }
 }
 
 - (IBAction)resolutionClicked:(id)sender
 {
   [self fillRateButton];
-  NSLog(@"resolutionClicked: Selected resolution: %@",
-        [[rateBtn selectedCell] representedObject]);
-  
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
-  
   [self setResolution];
-  
-  [[NSNotificationCenter defaultCenter]
-    addObserver:self
-       selector:@selector(screenDidUpdate:)
-           name:OSEScreenDidUpdateNotification
-         object:systemScreen];  
+  [self updateRateButton];
 }
 
 - (IBAction)rateClicked:(id)sender
 {
   [self setResolution];
-
-  NSLog(@"rateClicked: Selected resolution: %@",
-        [[rateBtn selectedCell] representedObject]);
 }
 
 - (IBAction)sliderMoved:(id)sender
@@ -296,33 +332,28 @@
   if (saveConfigTimer && [saveConfigTimer isValid]) {
     [saveConfigTimer invalidate];
   }
-  saveConfigTimer = [NSTimer
-                      scheduledTimerWithTimeInterval:2
-                                              target:self
-                                            selector:@selector(saveDisplayConfig)
-                                            userInfo:nil
-                                             repeats:NO];
+  saveConfigTimer = [NSTimer scheduledTimerWithTimeInterval:2
+                                                     target:self
+                                                   selector:@selector(saveDisplayConfig)
+                                                   userInfo:nil
+                                                    repeats:NO];
   [saveConfigTimer retain];
-  
+
   if (sender == gammaSlider) {
     // NSLog(@"Gamma slider moved");
     [gammaField setStringValue:[NSString stringWithFormat:@"%.2f", value]];
-      
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0),
-                   ^{
-                     [selectedDisplay setGamma:value];
-                   });
-  }
-  else if (sender == brightnessSlider) {
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+      [selectedDisplay setGamma:value];
+    });
+  } else if (sender == brightnessSlider) {
     // NSLog(@"Brightness slider moved");
     // if (value > 1.0) value = 1.0;
     [brightnessField setIntValue:[sender intValue]];
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0),
-                   ^{
-                     [selectedDisplay setGammaBrightness:value/100];
-                   });
-  }
-  else {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+      [selectedDisplay setGammaBrightness:value / 100];
+    });
+  } else {
     NSLog(@"Unknown slider moved");
   }
 }
@@ -331,24 +362,26 @@
 {
   NSColor *color = [sender color];
   NSColor *rgbColor = [color colorUsingColorSpaceName:NSDeviceRGBColorSpace];
-    
+
   // NSLog(@"Display: backgroundChanged: %@", [sender className]);
   if ([systemScreen setBackgroundColorRed:[rgbColor redComponent]
                                     green:[rgbColor greenComponent]
                                      blue:[rgbColor blueComponent]] == YES) {
-    NXTDefaults   *defs = [NXTDefaults globalUserDefaults];
+    OSEDefaults *defs = [OSEDefaults globalUserDefaults];
     NSDictionary *dBack;
 
-    dBack = @{@"Red":   [NSNumber numberWithFloat:[color redComponent]],
-              @"Green": [NSNumber numberWithFloat:[color greenComponent]],
-              @"Blue":  [NSNumber numberWithFloat:[color blueComponent]],
-              @"Alpha": [NSNumber numberWithFloat:1.0]};
+    dBack = @{
+      @"Red" : [NSNumber numberWithFloat:[color redComponent]],
+      @"Green" : [NSNumber numberWithFloat:[color greenComponent]],
+      @"Blue" : [NSNumber numberWithFloat:[color blueComponent]],
+      @"Alpha" : [NSNumber numberWithFloat:1.0]
+    };
     [defs setObject:dBack forKey:OSEDesktopBackgroundColor];
   }
 }
 
 //
-// Browser (list of monitors) delegate methods
+#pragma mark - Browser delegate (monitors list)
 //
 - (NSString *)browser:(NSBrowser *)sender titleOfColumn:(NSInteger)column
 {
@@ -358,51 +391,47 @@
   return @"Monitors";
 }
 
-- (void)     browser:(NSBrowser *)sender
- createRowsForColumn:(NSInteger)column
-            inMatrix:(NSMatrix *)matrix
+- (void)browser:(NSBrowser *)sender
+    createRowsForColumn:(NSInteger)column
+               inMatrix:(NSMatrix *)matrix
 {
   NSBrowserCell *bc;
 
   if (column > 0)
     return;
 
-  for (OSEDisplay *d in [systemScreen connectedDisplays])
-    {
-      [matrix addRow];
-      bc = [matrix cellAtRow:[matrix numberOfRows]-1 column:0];
-      [bc setTitle:[d outputName]];
-      [bc setRepresentedObject:d];
-      [bc setLeaf:YES];
-      [bc setRefusesFirstResponder:YES];
-      [bc setEnabled:[d isActive]];
-    }
+  for (OSEDisplay *d in [systemScreen connectedDisplays]) {
+    [matrix addRow];
+    bc = [matrix cellAtRow:[matrix numberOfRows] - 1 column:0];
+    [bc setTitle:[d outputName]];
+    [bc setRepresentedObject:d];
+    [bc setLeaf:YES];
+    [bc setRefusesFirstResponder:YES];
+    [bc setEnabled:[d isActive]];
+  }
 }
 
 //
-// TextField Delegate methods
+#pragma mark - TextField Delegate
 //
 - (void)controlTextDidEndEditing:(NSNotification *)aNotification
 {
-  id      tf = [aNotification object];
+  id tf = [aNotification object];
   CGFloat value = [tf floatValue];
 
   NSLog(@"Display set gamma: %f", value);
 
-  if (tf == gammaField)
-    {
-      [gammaSlider setFloatValue:value];
-      [selectedDisplay setGamma:value];
-      [tf setFloatValue:value];
-    }
-  else if (tf == brightnessField)
-    {
-      [selectedDisplay setGammaBrightness:value/100];
-      value = [selectedDisplay gammaBrightness]*100;
-      [brightnessSlider setFloatValue:value];
-      // [tf setIntValue:[strVal intValue]];
-      [tf setFloatValue:value];
-    }
+  if (tf == gammaField) {
+    [gammaSlider setFloatValue:value];
+    [selectedDisplay setGamma:value];
+    [tf setFloatValue:value];
+  } else if (tf == brightnessField) {
+    [selectedDisplay setGammaBrightness:value / 100];
+    value = [selectedDisplay gammaBrightness] * 100;
+    [brightnessSlider setFloatValue:value];
+    // [tf setIntValue:[strVal intValue]];
+    [tf setFloatValue:value];
+  }
 
   // Changes to gamma is not generate XRRScreenChangeNotify event.
   // That's why saving display configuration is here.
@@ -412,13 +441,48 @@
 // Notifications
 - (void)screenDidUpdate:(NSNotification *)aNotif
 {
-  NSLog(@"Display: XRandR screen resources was updated, refreshing...");
+  NSLog(@"%s: XRandR screen resources was updated, refreshing...", __func__);
   [monitorsList reloadColumn:0];
   [self selectFirstEnabledMonitor];
 }
 
-//
-// Utility methods
-//
-  
+- (void)screenDidChange:(NSNotification *)aNotif
+{
+  NXTCountdownAlert *alert;
+  NSDictionary *oldResolution = [lastGoodResolution objectForKey:[selectedDisplay outputName]];
+  NSDictionary *activeResolution = [selectedDisplay activeResolution];
+
+  NSLog(@"%s: Received ScreenDidChange notification", __func__);
+
+  if ([[activeResolution objectForKey:OSEDisplayResolutionNameKey]
+          isEqualToString:[oldResolution objectForKey:OSEDisplayResolutionNameKey]] != NO) {
+    NSLog(@"%s: Resolution has been reverted to last good. Keep it!", __func__);
+    return;
+  }
+
+    alert = [[NXTCountdownAlert alloc]
+          initWithTitle:@"Display resolution"
+                message:@"Do you want to keep current display resolution?\n"
+                         "Resolution will be reverted in %i seconds."
+          defaultButton:@"Revert"
+        alternateButton:@"Keep"
+            otherButton:nil];
+  [alert setCountDownPeriod:5];
+
+  if ([alert runModal] == NSAlertDefaultReturn) {
+    NSDictionary *goodResolution = [lastGoodResolution objectForKey:[selectedDisplay outputName]];
+    NSLog(@"%s: %@ goodResolution: %@", __func__, [selectedDisplay outputName], lastGoodResolution);
+    if (goodResolution) {
+      NSLog(@"Revert resoltuion to previous - %@.", goodResolution);
+      [systemScreen setDisplay:selectedDisplay resolution:goodResolution];
+    } else {
+      NSLog(@"%s: PROBLEM: can't revert to previous resolution - it's nil", __func__);
+    }
+  } else {
+    NSLog(@"Keep current resoltuion.");
+  }
+  [alert release];
+}
+
+
 @end

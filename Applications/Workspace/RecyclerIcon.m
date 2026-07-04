@@ -25,8 +25,10 @@
 #import <Processes/ProcessManager.h>
 #import <Viewers/ShelfView.h>
 
+#import "Controller.h"
 #import "Recycler.h"
 #import "RecyclerIcon.h"
+#import "WMNotificationCenter.h"
 
 #include <core/util.h>
 #include <core/string_utils.h>
@@ -79,7 +81,7 @@ static NSCell *tileCell = nil;
 {
   NSSize iconSize = NSMakeSize(64, 64);
 
-  // NSLog(@"Recycler View: drawRect!");
+  NSDebugLLog(@"Recycler", @"Recycler View: drawRect!");
 
   [tileCell drawWithFrame:NSMakeRect(0, 0, iconSize.width, iconSize.height) inView:self];
   [dragCell drawWithFrame:NSMakeRect(0, 0, iconSize.width, iconSize.height) inView:self];
@@ -111,7 +113,7 @@ static NSTimeInterval tInterval = 0;
 
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
 {
-  // NSLog(@"Recycler: dragging entered!");
+  NSDebugLLog(@"Recycler", @"Recycler: dragging entered!");
 
   NSArray *sourcePaths;
   BOOL draggedFromRecycler = NO;
@@ -120,7 +122,7 @@ static NSTimeInterval tInterval = 0;
 
   for (NSString *path in sourcePaths) {
     if ([path rangeOfString:recycler.path].location != NSNotFound) {
-      NSLog(@"%@ is in %@", path, recycler.path);
+      NSDebugLLog(@"Recycler", @"%@ is in %@", path, recycler.path);
       draggedFromRecycler = YES;
       break;
     }
@@ -138,7 +140,7 @@ static NSTimeInterval tInterval = 0;
 
 - (void)draggingExited:(id<NSDraggingInfo>)sender
 {
-  // NSLog(@"Recycler: dragging exited!");
+  NSDebugLLog(@"Recycler", @"Recycler: dragging exited!");
   [recycler updateIconImage];
 }
 
@@ -153,7 +155,7 @@ static NSTimeInterval tInterval = 0;
 
 - (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)sender
 {
-  NSLog(@"Recycler: prepare fo dragging");
+  NSDebugLLog(@"Recycler", @"Recycler: prepare fo dragging");
   return ([sender draggingSourceOperationMask] == NSDragOperationNone) ? NO : YES;
 }
 
@@ -175,7 +177,7 @@ static NSTimeInterval tInterval = 0;
     db = [NSMutableDictionary new];
   }
 
-  NSLog(@"Recycler: perform dragging");
+  NSDebugLLog(@"Recycler", @"Recycler: perform dragging");
 
   [recycler setIconImage:[NSImage imageNamed:@"recycler"]];
 
@@ -209,7 +211,7 @@ static NSTimeInterval tInterval = 0;
 
 - (void)concludeDragOperation:(id<NSDraggingInfo>)sender
 {
-  // NSLog(@"Recycler: conclude dragging");
+  NSDebugLLog(@"Recycler", @"Recycler: conclude dragging");
 }
 
 @end
@@ -223,10 +225,11 @@ void _recyclerMouseDown(WObjDescriptor *desc, XEvent *event)
   WAppIcon *aicon = desc->parent;
   NSInteger clickCount = 1;
 
+  NSLog(@"%s", __func__);
   XUngrabPointer(dpy, CurrentTime);
 
   if (event->xbutton.button == Button1) {
-    if (IsDoubleClick(wDefaultScreen(), event)) {
+    if (wEventIsDoubleClick(wDefaultScreen(), event)) {
       clickCount = 2;
     }
 
@@ -255,6 +258,11 @@ void _recyclerMouseDown(WObjDescriptor *desc, XEvent *event)
     // XSendEvent(dpy, event->xbutton.root, False, ButtonPressMask, event);
     XSendEvent(dpy, aicon->dock->icon_array[0]->icon->icon_win, False, ButtonPressMask, event);
   }
+}
+
+void _recyclerExpose(WObjDescriptor *desc, XEvent *event)
+{
+  [[[NSApp delegate] recycler] updateIconImage];
 }
 
 @implementation RecyclerIcon
@@ -288,6 +296,7 @@ void _recyclerMouseDown(WObjDescriptor *desc, XEvent *event)
   btn->dnd_command = NULL;
   btn->paste_command = NULL;
   btn->icon->core->descriptor.handle_mousedown = _recyclerMouseDown;
+  btn->icon->core->descriptor.handle_expose = _recyclerExpose;
 
   return btn;
 }
@@ -334,6 +343,7 @@ void _recyclerMouseDown(WObjDescriptor *desc, XEvent *event)
   } else {
     // Recycler icon can be restored from state file
     btn->icon->core->descriptor.handle_mousedown = _recyclerMouseDown;
+    btn->icon->core->descriptor.handle_expose = _recyclerExpose;
   }
 
   return rec_btn;
@@ -385,6 +395,8 @@ void _recyclerMouseDown(WObjDescriptor *desc, XEvent *event)
 
 - (id)initWithWindowRef:(void *)xWindow recycler:(Recycler *)theRecycler
 {
+  Window *win = (Window *)xWindow;
+  NSDebugLLog(@"Recycler", @"%s: 0x%lX", __func__, *win);
   self = [super initWithWindowRef:xWindow];
   recycler = theRecycler;
 
@@ -393,7 +405,18 @@ void _recyclerMouseDown(WObjDescriptor *desc, XEvent *event)
                 name:NSApplicationDidChangeScreenParametersNotification
               object:NSApp];
 
+  [[WMNotificationCenter defaultCenter]
+      addObserver:self
+         selector:@selector(wmDidChangeTile:)
+             name:CF_NOTIFICATION(WMDidChangeIconTileSettings)
+           object:nil];
+
   return self;
+}
+
+- (void)wmDidChangeTile:(NSNotification *)aNotif
+{
+  [[self contentView] setNeedsDisplay:YES];
 }
 
 - (BOOL)canBecomeMainWindow

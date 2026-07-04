@@ -823,7 +823,7 @@ void wExecuteShellCommand(WScreen *scr, const char *command)
     data->scr = scr;
     data->command = wstrdup(command);
 
-    wAddDeathHandler(pid, _shellCommandHandler, data);
+    wAddExitHandler(pid, _shellCommandHandler, data);
   }
 }
 
@@ -876,7 +876,7 @@ Bool wRelaunchWindow(WWindow *wwin)
     data->command = wtokenjoin(argv, argc);
 
     /* not actually a shell command */
-    wAddDeathHandler(pid, _shellCommandHandler, data);
+    wAddExitHandler(pid, _shellCommandHandler, data);
 
     XFreeStringList(argv);
   }
@@ -931,11 +931,12 @@ CFTypeRef wGetNotificationInfoValue(CFDictionaryRef theDict, CFStringRef key)
 {
   const void *keys;
   const void *values;
-  void *desired_value = "";
+  void *desired_value = NULL;
 
-  if (!theDict)
+  if (!theDict) {
     return desired_value;
-
+  }
+  
   CFDictionaryGetKeysAndValues(theDict, &keys, &values);
   for (int i = 0; i < CFDictionaryGetCount(theDict); i++) {
     if (CFStringCompare(&keys[i], key, 0) == 0) {

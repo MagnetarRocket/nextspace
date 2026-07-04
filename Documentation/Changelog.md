@@ -1,10 +1,6 @@
-Changes since 0.85 release of NEXTSPACE
-===
+# 0.90: changes since 0.85
 
-Applications
----
-
-**Login**
+## Login
 
 - Some reengeneering of application was done.
 - Return code of Workspace application handled specifically: if `11` returned Login execute shutdown procedure without panel displayed; if `12` returned - executes reboot procedure.
@@ -12,7 +8,7 @@ Applications
 - Start sequence was changed: Login completely handles Xorg start and stop; loginwindow.service now handles only Login (doesn't kill Xorg on service stop).
 - Defauls splitted into system (/usr/NextSpace/Preferences/Login) and user ($HOME/Library/Preferences/.NextSpace/Login). User defaults is a place were login/logout hooks are placed by "Login Preferences".
 
-**Workspace**
+### Workspace
 
 - Workspace returns exit code `11` on quit if "Power Off" button was pressed. As a result Login application performs OS shutdown without ordering front panel - should switch to Plymouth shutdown screen.
 - "Power Off" quit panel button now starts OS shutdown sequence.
@@ -26,7 +22,7 @@ Applications
 - Copy operation speed improved. It's 4 times faster now.
 - Appicon of runing application can be dragged out of the Dock. It automatically placed in the Icon Yard after mouse up.
 
-**Preferences**
+### Preferences
 
 - "Login Preferences" module was implemented:
 	- implementation completed for "Login Hook", "Logout Hook", "Restore Last Logged In User Name", "Display Host Name".
@@ -34,10 +30,9 @@ Applications
 - "Sound Preferences" now display configured "System Beep" with selection of sound in list at first module loading.
 - "Password Preferences" module was implemented. Now I need to find out how to change PAM settings to change password as user without SUID bit set (as `passwd` command works).
 
-Frameworks
----
+## Frameworks
 
-**DesktopKit**
+### DesktopKit
 
 - Implemented `NXTOpenPanel : NXTSavePanel` and `NXTSavePanel : NSSavePanel`. 
   Differences to NSOpenPanel and NSSavePanel:
@@ -50,7 +45,7 @@ Frameworks
 	- Escape key press pastes current path into textfield - default completion shortcut (also used in Workspace's Finder).
 - NXAlertPanel fixed setting size for multi-line messages.
 
-**SoundKit**
+### SoundKit
 
 - implemented play of sound bytes via the SNDPlayStream;
 - SNDPlayStream and SNDRecord stream now have ability to pause/resume;

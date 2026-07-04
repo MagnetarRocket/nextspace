@@ -1,33 +1,26 @@
 #!/bin/sh
 # -*-Shell-script-*-
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit 1
-fi
-
-REPO_DIR=$1
-SPEC_FILE=${REPO_DIR}/Libraries/libcorefoundation/libcorefoundation.spec
-CF_VERSION=`rpm_version ${SPEC_FILE}`
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/libcorefoundation.spec
+CF_VERSION=`rpm_version ${SPEC_FILE} "$@"`
 
 print_H1 " Building Core Foundation (libcorefoundation) package..."
-cp ${REPO_DIR}/Libraries/libcorefoundation/*.patch ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/libcorefoundation/CFNotificationCenter.c ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/libcorefoundation/CFFileDescriptor.[ch] ${SOURCES_DIR}
-
 print_H2 "===== Install Core Foundation build dependencies..."
 DEPS=`rpmspec -q --buildrequires ${SPEC_FILE} | awk -c '{print $1}'`
 sudo yum -y install ${DEPS}
 
 print_H2 "===== Downloading Core Foundation sources..."
 _VER=`rpmspec -q --qf "%{version}:" ${SPEC_FILE} | awk -F: '{print $1}'`
-curl -L https://github.com/apple/swift-corelibs-foundation/archive/swift-${_VER}-RELEASE.tar.gz -o ${SOURCES_DIR}/libcorefoundation-${_VER}.tar.gz
+_REL=`rpmspec -q --qf "%{release}:" ${SPEC_FILE} | awk -F: '{print $1}' | awk -F. '{print $1}'`
+curl -L https://github.com/trunkmaster/apple-corefoundation/archive/refs/tags/${_VER}-${_REL}.tar.gz -o ${RPM_SOURCES_DIR}/libcorefoundation-${_VER}-${_REL}.tar.gz
 spectool -g -R ${SPEC_FILE}
 
 print_H2 "===== Building CoreFoundation package..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
     print_OK " Building of Core Foundation library RPM SUCCEEDED!"

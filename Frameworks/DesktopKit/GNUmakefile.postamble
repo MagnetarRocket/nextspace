@@ -1,7 +1,12 @@
 # -*- mode: makefile-gmake -*-
 
-DEST_SYS_LIB = $(DESTDIR)/$(GNUSTEP_SYSTEM_LIBRARY)
-DEST_LOC_LIB = $(DESTDIR)/$(GNUSTEP_LOCAL_LIBRARY)
+ifeq ("$(DESTDIR)", "")
+  DEST_SYS_LIB = $(GNUSTEP_SYSTEM_LIBRARY)
+  DEST_LOC_LIB = $(GNUSTEP_LOCAL_LIBRARY)
+else
+  DEST_SYS_LIB = $(DESTDIR)/$(GNUSTEP_SYSTEM_LIBRARY)
+  DEST_LOC_LIB = $(DESTDIR)/$(GNUSTEP_LOCAL_LIBRARY)
+endif
 
 after-clean::
 
@@ -11,7 +16,7 @@ after-install::
 # /ust/NextSpace/Images
 	if [ ! -e $(DEST_SYS_LIB)/Images ]; then \
 	  cd $(DEST_SYS_LIB); \
-	  ln -s $(GNUSTEP_SYSTEM_LIBRARY)/Frameworks/DesktopKit.framework/Resources/Images $(DEST_SYS_LIB); \
+	  ln -s Frameworks/DesktopKit.framework/Resources/Images $(DEST_SYS_LIB); \
 	fi
 
 # /Library/Fonts
@@ -25,7 +30,7 @@ after-install::
 # /usr/NextSpace/Fonts
 	if [ ! -e $(DEST_SYS_LIB)/Fonts ]; then \
 	  cd $(DEST_SYS_LIB); \
-	  ln -s $(GNUSTEP_SYSTEM_LIBRARY)/Frameworks/DesktopKit.framework/Resources/Fonts $(DEST_SYS_LIB); \
+	  ln -s Frameworks/DesktopKit.framework/Resources/Fonts $(DEST_SYS_LIB); \
 	fi
 
 # /usr/NextSpace/Sounds
@@ -33,7 +38,7 @@ after-install::
 	  rm -r $(DEST_SYS_LIB)/Sounds; \
 	fi
 	cd $(DEST_SYS_LIB); \
-	ln -s $(GNUSTEP_SYSTEM_LIBRARY)/Frameworks/DesktopKit.framework/Resources/Sounds $(DEST_SYS_LIB)/; \
+	ln -s Frameworks/DesktopKit.framework/Resources/Sounds $(DEST_SYS_LIB)/; \
 
 # /usr/NextSpace/Sounds/SystemBeep.snd
 	if [ ! -e $(DEST_SYS_LIB)/Frameworks/DesktopKit.framework/Resources/Sounds/SystemBeep.snd ]; then \

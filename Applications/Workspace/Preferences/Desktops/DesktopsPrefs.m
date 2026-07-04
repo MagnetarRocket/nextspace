@@ -20,37 +20,42 @@
 */
 
 #import "DesktopsPrefs.h"
-#import <DesktopKit/NXTDefaults.h>
+
+#import <SystemKit/OSEDefaults.h>
 #import <Workspace+WM.h>
 #import <Controller.h>
+#import <WMNotificationCenter.h>
 
 #include <core/wuserdefaults.h>
 #include <desktop.h>
+#include <screen.h>
 
 @interface DesktopsPrefs (Private)
-- (NSString *)_wmStatePath;
+- (NSString *)_wmPreferencesPathForName:(NSString *)fileName;
 - (NSDictionary *)_wmState;
+- (NSDictionary *)_wmDefaults;
 @end
 
 @implementation DesktopsPrefs (Private)
 
-- (NSString *)_wmStatePath
+- (NSString *)_wmPreferencesPathForName:(NSString *)fileName
 {
-  CFStringRef stringRef;
-  const char *wm_path;
+  CFStringRef wm_defaults_path, domain_file;
+  const char *wm_preferences_path;
   NSString *path;
 
-  stringRef = WMUserDefaultsCopyStringForDomain(CFSTR("WMState.plist"));
-  if (!stringRef)
+  domain_file = CFStringCreateWithFormat(kCFAllocatorDefault, 0, CFSTR("%s.plist"), [fileName cString]);
+  wm_defaults_path = WMUserDefaultsCopyStringForDomain(domain_file);
+  if (!wm_defaults_path)
     return nil;
 
-  wm_path = CFStringGetCStringPtr(stringRef, kCFStringEncodingUTF8);
-  path = [NSString stringWithCString:wm_path];
-  CFRelease(stringRef);
+  wm_preferences_path = CFStringGetCStringPtr(wm_defaults_path, kCFStringEncodingUTF8);
+  path = [NSString stringWithCString:wm_preferences_path];
+  CFRelease(wm_defaults_path);
 
-  NSLog(@"WMState path: %@", path);
+  NSDebugLLog(@"Preferences", @"WM defaults with name %@ path: %@", fileName, path);
 
-  return path;
+  return path;  
 }
 
 - (NSDictionary *)_wmState
@@ -58,10 +63,21 @@
   NSDictionary *wmState;
 
   // Defaults existance handled by WM.
-  wmState = [[NSDictionary alloc] initWithContentsOfFile:[self _wmStatePath]];
+  wmState = [[NSDictionary alloc] initWithContentsOfFile:[self _wmPreferencesPathForName:@"WMState"]];
 
   return [wmState autorelease];
 }
+
+- (NSDictionary *)_wmDefaults
+{
+  NSDictionary *wmDefaults;
+
+  // Defaults existance handled by WM.
+  wmDefaults = [[NSDictionary alloc] initWithContentsOfFile:[self _wmPreferencesPathForName:@"WM"]];
+
+  return [wmDefaults autorelease];
+}
+
 
 @end
 
@@ -100,7 +116,7 @@
 
   // Show In Dock button
   [showInDockBtn setRefusesFirstResponder:YES];
-  [showInDockBtn setState:[[NXTDefaults userDefaults] boolForKey:@"ShowDesktopInDock"]];
+  [showInDockBtn setState:[[OSEDefaults userDefaults] boolForKey:@"ShowDesktopInDock"]];
 
   DESTROY(window);
 }
@@ -122,49 +138,53 @@
 
 - (void)revert:sender
 {
+  NSDictionary *wmState;
   NSDictionary *wmDefaults;
   NSString *shortcut;
   NSArray *modifiers;
 
-  wmDefaults = [[NSDictionary alloc] initWithDictionary:[self _wmState]];
-
-  if (!wmDefaults)
+  // Desktops
+  wmState = [[NSDictionary alloc] initWithDictionary:[self _wmState]];
+  if (!wmState) {
     return;
-
-  if (wmStateDesktops)
+  }
+  if (wmStateDesktops) {
     [wmStateDesktops release];
-
-  wmStateDesktops = [[NSMutableArray alloc] initWithArray:[wmDefaults objectForKey:@"Desktops"]];
+  }
+  wmStateDesktops = [[NSMutableArray alloc] initWithArray:[wmState objectForKey:@"Desktops"]];
   [self arrangeDesktopReps];
   [[desktopReps objectAtIndex:wDefaultScreen()->current_desktop] performClick:self];
+  [wmState release];
 
-  // NSLog(@"switchKey = %@ (%li/%li), directSwitchKey = %@ (%li/%li)",
-  //       [switchKey className], [[switchKey selectedItem] tag],
-  //       [switchKey numberOfItems],
-  //       [directSwitchKey className], [[directSwitchKey selectedItem] tag],
-  //       [directSwitchKey numberOfItems]);
+  NSDebugLLog(@"Preferences", @"switchKey = %@ (%li/%li), directSwitchKey = %@ (%li/%li)",
+              [switchKey className], [[switchKey selectedItem] tag], [switchKey numberOfItems],
+              [directSwitchKey className], [[directSwitchKey selectedItem] tag],
+              [directSwitchKey numberOfItems]);
 
   // Shortcuts
+  wmDefaults = [[NSDictionary alloc] initWithDictionary:[self _wmDefaults]];
+  if (!wmDefaults) {
+    return;
+  }
   shortcut = [wmDefaults objectForKey:@"NextWorkspaceKey"];
   modifiers = [shortcut componentsSeparatedByString:@"+"];
-  if ([[modifiers objectAtIndex:0] isEqualToString:@"Mod4"]) {
+  if ([[modifiers objectAtIndex:0] isEqualToString:@"Super"]) {
     [switchKey selectItemWithTag:0];
-  } else if ([[modifiers objectAtIndex:0] isEqualToString:@"Mod1"]) {
+  } else if ([[modifiers objectAtIndex:0] isEqualToString:@"Alt"]) {
     [switchKey selectItemAtIndex:2];
   } else {
     [switchKey selectItemAtIndex:1];
   }
-
+  //
   shortcut = [wmDefaults objectForKey:@"Workspace1Key"];
   modifiers = [shortcut componentsSeparatedByString:@"+"];
-  if ([[modifiers objectAtIndex:0] isEqualToString:@"Mod4"]) {
+  if ([[modifiers objectAtIndex:0] isEqualToString:@"Super"]) {
     [directSwitchKey selectItemWithTag:0];
-  } else if ([[modifiers objectAtIndex:0] isEqualToString:@"Mod1"]) {
+  } else if ([[modifiers objectAtIndex:0] isEqualToString:@"Alt"]) {
     [directSwitchKey selectItemWithTag:2];
   } else {
     [directSwitchKey selectItemWithTag:1];
   }
-
   [wmDefaults release];
 }
 
@@ -177,7 +197,8 @@
   NSPoint repPoint = repFrame.origin;
   NSButton *rep;
 
-  repPoint.x = (boxWidth - repsWidth) / 2;
+  repPoint.x = floorf((boxWidth - repsWidth) / 2);
+  repPoint.y = floorf(repPoint.y);
   for (int i = 0; i < desktopsCount; i++) {
     rep = [desktopReps objectAtIndex:i];
     [rep setFrameOrigin:repPoint];
@@ -194,7 +215,7 @@
 
   for (int i = 0; i < desktopsCount; i++) {
     button = [desktopReps objectAtIndex:i];
-    // NSLog(@"%d - Sender: %@, Button: %@", i, [sender title], [button title]);
+    NSDebugLLog(@"Preferences", @"%d - Sender: %@, Button: %@", i, [sender title], [button title]);
     if (sender == button) {
       [sender setState:NSOnState];
       if (wmStateDesktops && [wmStateDesktops count] > i) {
@@ -206,7 +227,7 @@
       [nameField setStringValue:name];
       selectedDesktopRep = sender;
     } else {
-      // NSLog(@"%d -  Button: %@ set to NSOffState", i, [button title]);
+      NSDebugLLog(@"Preferences", @"%d -  Button: %@ set to NSOffState", i, [button title]);
       [button setState:NSOffState];
     }
   }
@@ -231,7 +252,7 @@
   NSDictionary *wsInfo = nil;
   NSString *wsName = nil;
 
-  // NSLog(@"Text changed in %@", [object className]);
+  NSDebugLLog(@"Preferences", @"Text changed in %@", [[aNotification object] className]);
   if ([aNotification object] != nameField) {
     return;
   }
@@ -290,7 +311,7 @@
   NSMutableDictionary *wmDefaults;
   NSString *prefix;
 
-  wmDefaults = [[NSMutableDictionary alloc] initWithDictionary:[self _wmState]];
+  wmDefaults = [[NSMutableDictionary alloc] initWithDictionary:[self _wmDefaults]];
   if (!wmDefaults) {
     wmDefaults = [[NSMutableDictionary alloc] init];
   }
@@ -309,15 +330,21 @@
 
   [wmDefaults setObject:[NSString stringWithFormat:@"%@+Right", prefix] forKey:@"NextWorkspaceKey"];
   [wmDefaults setObject:[NSString stringWithFormat:@"%@+Left", prefix] forKey:@"PrevWorkspaceKey"];
-  [wmDefaults writeToFile:[self _wmStatePath] atomically:YES];
+  [wmDefaults writeToFile:[self _wmPreferencesPathForName:@"WM"] atomically:YES];
   [wmDefaults release];
+
+  // Specify notification name as string to omit redefinition confusion
+  [[WMNotificationCenter defaultCenter]
+      postNotificationName:@"WMDidChangeAppearanceSettingsNotification"
+                    object:@"GSWorkspaceNotification"
+                  userInfo:nil];
 }
 - (void)setDirectSwitchShortcut:(id)sender
 {
   NSMutableDictionary *wmDefaults;
   NSString *prefix;
 
-  wmDefaults = [[NSMutableDictionary alloc] initWithDictionary:[self _wmState]];
+  wmDefaults = [[NSMutableDictionary alloc] initWithDictionary:[self _wmDefaults]];
   if (!wmDefaults) {
     wmDefaults = [NSMutableDictionary new];
   }
@@ -339,14 +366,14 @@
                    forKey:[NSString stringWithFormat:@"Workspace%iKey", i]];
   }
   [wmDefaults setObject:[NSString stringWithFormat:@"%@+0", prefix] forKey:@"Workspace10Key"];
-  [wmDefaults writeToFile:[self _wmStatePath] atomically:YES];
+  [wmDefaults writeToFile:[self _wmPreferencesPathForName:@"WM"] atomically:YES];
   [wmDefaults release];
 }
 
 // ---
 - (void)setShowInDock:(id)sender
 {
-  [[NXTDefaults userDefaults] setBool:[sender state] ? YES : NO forKey:@"ShowWorkspaceInDock"];
+  [[OSEDefaults userDefaults] setBool:[sender state] ? YES : NO forKey:@"ShowWorkspaceInDock"];
   if ([sender state]) {
     [[NSApp delegate] createWorkspaceBadge];
   } else {

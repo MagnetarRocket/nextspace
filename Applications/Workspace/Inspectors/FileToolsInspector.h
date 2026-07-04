@@ -31,11 +31,12 @@
   id bottomTextField;
   id view;
 
-  NSWorkspace *ws;
-  NSString    *defaultEditor;
- 
+  NSMatrix *appMatrix;
+
+  NSWorkspace *workspace;
+
   NSString *path;
-  NSArray  *files;
+  NSArray *files;
 }
 
 - (void)appSelected:sender;

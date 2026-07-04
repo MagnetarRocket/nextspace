@@ -1,0 +1,27 @@
+{
+    "## Comment" = "Do NOT change this file, Gorm maintains it";
+    Inspector = {
+	Actions = (
+	);
+	Outlets = (
+	    bitsPerPixelField,
+	    bytesPerPlaneField,
+	    fileSizeField,
+	    formatField,
+	    heightField,
+	    bytesPerRowField,
+	    numberOfPlanesField,
+	    samplesPerPixelField,
+	    widthField,
+	    compressionField,
+	    compressionFactorField,
+	    panel,
+	    currentFrameField,
+	    fileModificationField,
+	    frameCountField,
+	    gammaField,
+	    progressiveField
+	);
+	Super = NSObject;
+    };
+}

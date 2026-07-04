@@ -50,6 +50,10 @@
 #include "client.h"
 #include "framewin.h"
 #include "appmenu.h"
+#include "stacking.h"
+
+#include "wmspec.h"
+#include "event.h"
 
 #include <Workspace+WM.h>
 
@@ -188,7 +192,7 @@ static WWindow *makeMainWindow(WScreen *scr, Window window)
   wwin->main_window = window;
   wwin->wm_hints = XGetWMHints(dpy, window);
 
-  PropGetWMClass(window, &wwin->wm_class, &wwin->wm_instance);
+  wPropertiesGetWMClass(window, &wwin->wm_class, &wwin->wm_instance);
   if (wwin->wm_class != NULL && strcmp(wwin->wm_class, "GNUstep") == 0)
     wwin->flags.is_gnustep = 1;
 
@@ -265,10 +269,16 @@ void wApplicationRemoveWindow(WApplication *wapp, WWindow *wwin)
   WWindow *awin;
 
   /* Application could be already destroyed */
-  if (wapp == NULL || wapp->windows == NULL || wwin == NULL)
+  if (wapp == NULL || wapp->windows == NULL || wwin == NULL || wapp->refcount == 0) {
     return;
+  }
 
   window_count = CFArrayGetCount(wapp->windows);
+  if (window_count < 1) {
+    return;
+  }
+  // CFLog(kCFLogLevelInfo, CFSTR("%s: application refcount == %i, windows # == %i"), __func__,
+  //       wapp->refcount, window_count);
 
   WMLogInfo("REMOVE window: %lu name: %s WApplication refcount=%i", wwin->client_win,
             wwin->wm_instance, wapp->refcount);
@@ -283,7 +293,55 @@ void wApplicationRemoveWindow(WApplication *wapp, WWindow *wwin)
       break;
     }
   }
+
+  if (wapp->flags.is_gnustep == 0 && wapp->refcount == 1) {
+    wApplicationDeactivate(wapp);
+  }
 }
+
+void wApplicationSwitchWindow(WWindow *wwin, Bool forward)
+{
+  WApplication *wapp;
+  CFIndex count;
+  WWindow *new_wwin;
+  CFIndex cur_index, new_index;
+
+  if (wwin->frame->desktop != wwin->screen->current_desktop) {
+    return;
+  }
+
+  wapp = wApplicationForWindow(wwin);
+  count = CFArrayGetCount(wapp->windows);
+  cur_index = CFArrayGetFirstIndexOfValue(wapp->windows, CFRangeMake(0, count), wwin);
+  if (forward) {
+    new_index = (cur_index < count - 1) ? cur_index + 1 : 0;
+  } else {
+    new_index = (cur_index > 0) ? cur_index - 1 : count - 1;
+  }
+
+  new_wwin = (WWindow *)CFArrayGetValueAtIndex(wapp->windows, new_index);
+  if (new_wwin->frame) {
+      wRaiseFrame(new_wwin->frame->core);
+      CommitStacking(new_wwin->screen);
+      if (!new_wwin->flags.mapped) {
+        wMakeWindowVisible(new_wwin);
+      } else {
+        wSetFocusTo(new_wwin->screen, new_wwin);
+      }
+    } else {
+      wSetFocusTo(new_wwin->screen, new_wwin);
+    }
+}
+
+static void _applicationProcessHandler(pid_t pid, unsigned int status, void *client_data)
+{
+  WApplication *wapp = (WApplication *)client_data;
+  
+  CFLog(kCFLogLevelInfo, CFSTR("%s: application PID == %i"), __func__, pid);
+
+  wApplicationDestroy(wapp);
+}
+
 
 WApplication *wApplicationCreate(WWindow *wwin)
 {
@@ -310,8 +368,8 @@ WApplication *wApplicationCreate(WWindow *wwin)
     return wapp;
   }
 
-  WMLogInfo("CREATE for window: %lu level:%i name: %s", wwin->client_win, WINDOW_LEVEL(wwin),
-            wwin->wm_instance);
+  WMLogInfo("CREATE for window: %lu main_window: %lu level:%i name: %s", wwin->client_win,
+            main_window, WINDOW_LEVEL(wwin), wwin->wm_instance);
 
   wapp = wmalloc(sizeof(WApplication));
 
@@ -357,14 +415,21 @@ WApplication *wApplicationCreate(WWindow *wwin)
 
   create_appicon_for_application(wapp, wwin);
 
-  /* Application menu */
+  /* Application menu and death handler */
   if (!wapp->flags.is_gnustep) {
+    // Application menu
     wapp->app_menu = wApplicationMenuCreate(scr, wapp);
     wapp->appState = (CFMutableDictionaryRef)WMUserDefaultsRead(wapp->appName, false);
     if (wapp->appState) {
       CFRetain(wapp->appState);
       wapp->menus_state =
           (CFMutableArrayRef)CFDictionaryGetValue(wapp->appState, CFSTR("MenusState"));
+    }
+    // Death handler
+    // Some applications doesn't destroy main window after exit - for example Steam Client.
+    int pid = wNETWMGetPidForWindow(wwin->client_win);
+    if (pid > 0) {
+      wAddExitHandler(wNETWMGetPidForWindow(wwin->client_win), _applicationProcessHandler, wapp);
     }
   }
 
@@ -426,15 +491,14 @@ void wApplicationDestroy(WApplication *wapp)
   WWindow *wwin;
   WScreen *scr;
 
-  if (!wapp)
+  if (!wapp || wapp->refcount != 1) {
     return;
+  }
+  
+  wapp->refcount--;
 
   WMLogInfo("DESTROY main window:%lu name:%s windows #:%li refcount:%i", wapp->main_window,
             wapp->app_icon->wm_instance, CFArrayGetCount(wapp->windows), wapp->refcount);
-
-  wapp->refcount--;
-  if (wapp->refcount > 0)
-    return;
 
   scr = wapp->main_wwin->screen;
   
@@ -459,7 +523,7 @@ void wApplicationDestroy(WApplication *wapp)
     WMUserDefaultsWrite(wapp->appState, wapp->appName);
     CFRelease(wapp->menus_state);
   }
-  if (!wapp->flags.is_gnustep) {
+  if (!wapp->flags.is_gnustep && wapp->appState) {
     CFRelease(wapp->appState);
   }
   CFRelease(wapp->appName);
@@ -526,7 +590,7 @@ void wApplicationActivate(WApplication *wapp)
 
   wApplicationMakeFirst(wapp);
 
-  if (!wapp->flags.is_gnustep && !wapp->app_menu->flags.mapped) {
+  if (!wapp->flags.is_gnustep && wapp->app_menu && !wapp->app_menu->flags.mapped) {
     if (wapp->menus_state && !wapp->app_menu->flags.restored) {
       wApplicationMenuRestoreFromState(wapp->app_menu, wapp->menus_state);
       wapp->app_menu->flags.restored = 1;
@@ -541,6 +605,14 @@ void wApplicationActivate(WApplication *wapp)
           kCFAllocatorDefault, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     }
     wapp->last_focused = scr->focused_window;
+
+    if (wapp->app_menu) {
+      WMenuItem *item;
+      item = wMenuItemWithTitle(wapp->app_menu, "Windows");
+      if (item) {
+        wMenuItemSetEnabled(item->menu, item, 1);
+      }
+    }
   }
 
   if (scr->notificationCenter) {
@@ -556,6 +628,13 @@ void wApplicationDeactivate(WApplication *wapp)
   if (wapp->app_icon) {
     wIconSetHighlited(wapp->app_icon->icon, False);
     wAppIconPaint(wapp->app_icon);
+  }
+  if (wapp->app_menu) {
+    WMenuItem *item;
+    item = wMenuItemWithTitle(wapp->app_menu, "Windows");
+    if (item) {
+      wMenuItemSetEnabled(item->menu, item, 0);
+    }
   }
   if (wapp->app_menu && wapp->app_menu->flags.mapped) {
     wApplicationMenuHide(wapp->app_menu);

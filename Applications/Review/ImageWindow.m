@@ -1,4 +1,4 @@
-/* 
+/*
  * ImageWindow.m
  */
 
@@ -7,47 +7,56 @@
 #import "Inspector.h"
 #import <AppKit/PSOperators.h>
 
-@interface RScrollView : NSScrollView
+#pragma mark - Custom ScrollView
+
+@interface ImageScrollView : NSScrollView
 {
-  NSView *scaleBtn;
 }
-- (void)setScaleView:(NSView *)scale;
+@property (readwrite, assign) NSView *scaleView;
+@property (readwrite, assign) NSView *multipageView;
 
 @end
 
-@implementation RScrollView
-
-- (void)setScaleView:(NSView *)scale
-{
-  scaleBtn = scale;
-}
+@implementation ImageScrollView
 
 - (void)tile
 {
-  NSScroller *hScroller = [self horizontalScroller];
-  NSRect     hsFrame;
-
   [super tile];
 
-  hsFrame = [hScroller frame];
-  hsFrame.size.width -= [scaleBtn frame].size.width+2;
-  [hScroller setFrame:hsFrame];
+  if (_multipageView) {
+    NSScroller *vScroller = [self verticalScroller];
+    NSRect vsFrame = [vScroller frame];
+    // NSPoint vsOrigin = vsFrame.origin;
+
+    vsFrame.size.height -= _multipageView.frame.size.height;
+
+    [vScroller setFrame:vsFrame];
+  }
+
+  if (_scaleView) {
+    NSScroller *hScroller = [self horizontalScroller];
+    NSRect hsFrame = [hScroller frame];
+
+    hsFrame.size.width -= _scaleView.frame.size.width + 3;
+    [hScroller setFrame:hsFrame];
+  }
 }
 
 - (void)drawRect:(NSRect)rect
 {
-  NSRect            hsFrame = [[self horizontalScroller] frame];
-  NSPoint           lineStart, lineEnd;
+  NSRect hsFrame = [[self horizontalScroller] frame];
+  NSPoint lineStart, lineEnd;
   NSGraphicsContext *ctxt = GSCurrentContext();
 
   [super drawRect:rect];
 
-  if (_rFlags.flipped_view)
-    {
-      lineStart.x = hsFrame.origin.x + hsFrame.size.width;
-      lineStart.y = hsFrame.origin.y - 1;
-      lineEnd.y = lineStart.y + hsFrame.size.height + 1;
-    }
+  if ([self isFlipped] != NO) {
+    lineStart.x = hsFrame.origin.x + hsFrame.size.width;
+    lineStart.x += 0.5;
+    lineStart.y = hsFrame.origin.y - 1;
+    lineEnd.y = lineStart.y + hsFrame.size.height + 1;
+    lineStart.y += 0.5;
+  }
 
   DPSsetgray(ctxt, 0.0);
   DPSsetlinewidth(ctxt, 1.0);
@@ -61,155 +70,460 @@
   DPSmoveto(ctxt, lineStart.x, lineStart.y);
   DPSlineto(ctxt, lineEnd.x, lineEnd.y);
   DPSstroke(ctxt);
+
 }
 
 @end
 
-//------------------------------------------------------------------------
-@implementation ImageWindow
+#pragma mark - Multipage controls
 
-- (id)initWithContentsOfFile:(NSString *)path
+@interface ImageMultipageView : NSView
+@end
+
+@implementation ImageMultipageView
+
+- (instancetype)initWithFrame:(NSRect)rect
+                       target:(id)targetObject
+                   nextAction:(SEL)nextSelector
+                   prevAction:(SEL)prevSelector
 {
-  NSAssert(path,@"No path specified!");
+  [super initWithFrame:rect];
 
-  if ((self = [super init]))
-    {
-      NSRect      frame = NSMakeRect(0,0,0,0);
-      RScrollView *scrollView = nil;
-      NSImageView *imageView = nil; 
-      NSImage     *image;
-      NSArray     *array;
-      int         wMask = (NSTitledWindowMask 
-                           | NSClosableWindowMask
-                           | NSMiniaturizableWindowMask 
-                           | NSResizableWindowMask);
+  NSButton *pageUpButton, *pageDownButton;
+  pageUpButton = [[NSButton alloc] initWithFrame:NSMakeRect(1, 18, 16, 16)];
+  [pageUpButton setButtonType:NSMomentaryChangeButton];
+  [pageUpButton setImagePosition:NSImageOnly];
+  [pageUpButton setRefusesFirstResponder:YES];
+  [pageUpButton setImage:[NSImage imageNamed:@"PageUp"]];
+  [pageUpButton setAlternateImage:[NSImage imageNamed:@"PageUpH"]];
+  [pageUpButton setTarget:targetObject];
+  [pageUpButton setAction:prevSelector];
+  [self addSubview:pageUpButton];
 
-      attr = [[NSFileManager defaultManager] fileAttributesAtPath:path 
-	                                             traverseLink:NO];
-      RETAIN(attr);
-
-      // Image loading
-      imagePath = [path copy];
-      if (!(image = [[NSImage alloc] initWithContentsOfFile:path]))
-	{
-	  NSRunAlertPanel(@"Open file", 
-			  @"File %@ doesn't contain image %@", 
-			  @"Dismiss", nil, nil, path, image);
-	  return nil;
-	}
-	
-      // Image
-      [image setBackgroundColor: [NSColor lightGrayColor]];
-      array = [image representations];
-      reps  = [array count];
-      rep   = [array objectAtIndex:0];
-
-      if (rep == nil)
-	{
-	  return nil;
-	}
-      [rep retain];
-
-      imageSize  = [image size];
-      frame.size = imageSize;
-
-      // ImageView and ScrollView
-      imageView  = [[NSImageView alloc] initWithFrame:frame];
-      [imageView setEditable:NO];
-      [imageView setImage:image];
-      RELEASE(image);
-
-      frame.size = [NSScrollView frameSizeForContentSize:[imageView frame].size
-	                           hasHorizontalScroller:YES
-		  	             hasVerticalScroller:YES
-				              borderType:NSNoBorder];
-      scrollView = [[RScrollView alloc] initWithFrame:frame];
-      [scrollView setHasVerticalScroller:YES];
-      [scrollView setHasHorizontalScroller:YES];
-      [scrollView setBorderType:NSNoBorder];
-      [scrollView setDocumentView:imageView];
-      RELEASE(imageView);
-      [scrollView setAutoresizingMask:(NSViewWidthSizable |
-				       NSViewHeightSizable)];
-      // Content view
-      box = [[NSBox alloc] init];
-      [box setTitlePosition:NSNoTitle];
-      [box setBorderType:NSNoBorder];
-      [box setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-      [box setContentViewMargins:NSMakeSize(0.0, 0.0)];
-      [box setFrameFromContentFrame:frame];
-
-      // Popup
-      scalePopup = [[NSPopUpButton alloc] 
-        initWithFrame:NSMakeRect([box frame].size.width-57, 0, 57, 17)];
-      [scalePopup setRefusesFirstResponder:YES];
-      [scalePopup addItemWithTitle:@"10%"];
-      [scalePopup addItemWithTitle:@"20%"];
-      [scalePopup addItemWithTitle:@"30%"];
-      [scalePopup addItemWithTitle:@"40%"];
-      [scalePopup addItemWithTitle:@"50%"];
-      [scalePopup addItemWithTitle:@"60%"];
-      [scalePopup addItemWithTitle:@"70%"];
-      [scalePopup addItemWithTitle:@"80%"];
-      [scalePopup addItemWithTitle:@"90%"];
-      [scalePopup addItemWithTitle:@"100%"];
-      [scalePopup addItemWithTitle:@"200%"];
-      [scalePopup addItemWithTitle:@"300%"];
-      [scalePopup addItemWithTitle:@"400%"];
-      [scalePopup addItemWithTitle:@"500%"];
-      [scalePopup addItemWithTitle:@"600%"];
-      [scalePopup addItemWithTitle:@"700%"];
-      [scalePopup setAutoresizingMask:(NSViewMaxYMargin | NSViewMinXMargin)];
-      [scalePopup selectItemWithTitle:@"100%"];
-      [scrollView setScaleView:scalePopup];
-      [scrollView tile];
-
-      [box addSubview:scrollView];
-      RELEASE(scrollView);
-      [box addSubview:scalePopup];
-      RELEASE(scalePopup);
-
-      // Window
-     frame = [NSWindow frameRectForContentRect:frame styleMask:wMask];
-      if (imageSize.width > ([[NSScreen mainScreen] frame].size.width-64))
-	{
-	  frame.size.width = [[NSScreen mainScreen] frame].size.width-164;
-	}
-      if (imageSize.height > ([[NSScreen mainScreen] frame].size.height-64))
-	 {
-	  frame.size.height = [[NSScreen mainScreen] frame].size.height-64;
-	 }
-      if (frame.size.width < 100) frame.size.width = 100;
-      if (frame.size.height < 100) frame.size.height = 100;
-
-      window = [[NSWindow alloc] initWithContentRect:frame
-	                                   styleMask:wMask
-					     backing:NSBackingStoreRetained
-					       defer:YES];
-      [window setReleasedWhenClosed:YES];
-      [window setDelegate:self];
-      [window setFrame:frame display:YES];
-      [window setMaxSize:frame.size];
-      [window setMinSize:NSMakeSize(100,100)];
-      [window setContentView:box];
-      RELEASE(box);
-      [window setTitleWithRepresentedFilename:path];
-      [window setReleasedWhenClosed:YES];
-
-      [window center];
-      [window makeKeyAndOrderFront:nil];
-      [window display];
-    }
+  pageDownButton = [[NSButton alloc] initWithFrame:NSMakeRect(1, 1, 16, 16)];
+  [pageDownButton setButtonType:NSMomentaryChangeButton];
+  [pageDownButton setImagePosition:NSImageOnly];
+  [pageDownButton setRefusesFirstResponder:YES];
+  [pageDownButton setImage:[NSImage imageNamed:@"PageDown"]];
+  [pageDownButton setAlternateImage:[NSImage imageNamed:@"PageDownH"]];
+  [pageDownButton setTarget:targetObject];
+  [pageDownButton setAction:nextSelector];
+  [self addSubview:pageDownButton];
 
   return self;
 }
 
+- (void)drawRect:(NSRect)rect
+{
+  NSGraphicsContext *ctxt = GSCurrentContext();
+
+  [super drawRect:rect];
+
+  DPSmoveto(ctxt, 18, 0);
+  DPSlineto(ctxt, 18, self.frame.size.height);
+  DPSstroke(ctxt);
+}
+@end
+
+#pragma mark - Image window
+
+@implementation ImageWindow
+
+- (BOOL)_displayRepresentationAtIndex:(NSUInteger)index
+{
+  visibleRepIndex = index;
+  if (_visibleRep) {
+    [_visibleRep release];
+  }
+  _visibleRep = [representations objectAtIndex:visibleRepIndex];
+
+  if (_visibleRep == nil) {
+    NSLog(@"Failed to get representation at index %lu", index);
+    return NO;
+  } else {
+    [_visibleRep retain];
+    if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+      if (_displayImage) {
+        [_displayImage release];
+      }
+      _displayImage = [[NSImage alloc] initWithData:[(NSBitmapImageRep *)_visibleRep TIFFRepresentation]];
+
+      /* Preserve the current zoom: read the active percentage from the popup
+         and apply it to the new representation instead of resetting to 100% */
+      NSString *currentTitle = [scalePopup titleOfSelectedItem];
+      double currentPercent  = currentTitle
+          ? [[currentTitle substringToIndex:[currentTitle length] - 1] doubleValue]
+          : 100.0;
+      double factor     = currentPercent / 100.0;
+      NSSize scaledSize = NSMakeSize(round(_visibleRep.pixelsWide  * factor),
+                                     round(_visibleRep.pixelsHigh * factor));
+      [_displayImage setSize:scaledSize];
+      [imageView setImage:_displayImage];
+
+      /* Sync imageView frame so centering stays correct */
+      NSSize visibleSize = [_scrollView contentSize];
+      NSSize frameSize;
+      frameSize.width  = MAX(scaledSize.width,  visibleSize.width);
+      frameSize.height = MAX(scaledSize.height, visibleSize.height);
+      [imageView setFrameSize:frameSize];
+    } else {
+      return NO;
+    }
+  }
+  return YES;
+}
+
+- (void)displayNextRepresentation:(id)sender
+{
+  if (visibleRepIndex < [representations count] - 1) {
+    [self _displayRepresentationAtIndex:visibleRepIndex + 1];
+    [[Inspector sharedInspector] imageWindowDidBecomeActive:self];
+  }
+}
+- (void)displayPrevRepresentation:(id)sender
+{
+  if (visibleRepIndex > 0) {
+    [self _displayRepresentationAtIndex:visibleRepIndex - 1];
+    [[Inspector sharedInspector] imageWindowDidBecomeActive:self];
+  }
+}
+
+- (id)initWithContentsOfFile:(NSString *)path
+{
+  NSAssert(path, @"No path specified!");
+
+  if ((self = [super init])) {
+    NSRect frame = NSMakeRect(0, 0, 0, 0);
+    ImageScrollView *scrollView = nil;
+
+    int wMask = (NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask |
+                 NSResizableWindowMask);
+
+    attr = [[NSFileManager defaultManager] fileAttributesAtPath:path traverseLink:NO];
+    RETAIN(attr);
+
+    // Image loading
+    imagePath = [path copy];
+    if (!(_image = [[NSImage alloc] initWithContentsOfFile:path])) {
+      NSRunAlertPanel(@"Open file", @"File %@ doesn't contain image.", @"Dismiss", nil, nil, path);
+      return nil;
+    }
+    [_image setBackgroundColor:[NSColor lightGrayColor]];
+
+    representations = [_image representations];
+    [representations retain];
+    _visibleRep = representations[0];
+    imageSize = NSMakeSize(_visibleRep.pixelsWide, _visibleRep.pixelsHigh);
+    frame.size = imageSize;
+    
+    // ImageView
+    if (imageSize.width < 100 || imageSize.height < 100) {
+      frame.size = NSMakeSize(100,100);
+    }
+    imageView = [[NSImageView alloc] initWithFrame:frame];
+    [imageView setEditable:NO];
+    [imageView setImageAlignment:NSImageAlignCenter];
+
+    // [_image setBackgroundColor:[NSColor lightGrayColor]];
+    if ([self _displayRepresentationAtIndex:0] == NO) {
+      return nil;
+    }
+
+    // ScrollView
+    frame.size = [NSScrollView frameSizeForContentSize:[imageView frame].size
+                                 hasHorizontalScroller:YES
+                                   hasVerticalScroller:YES
+                                            borderType:NSNoBorder];
+    scrollView = [[ImageScrollView alloc] initWithFrame:frame];
+    [scrollView setHasVerticalScroller:YES];
+    [scrollView setHasHorizontalScroller:YES];
+    [scrollView setBorderType:NSNoBorder];
+    [scrollView setDocumentView:imageView];
+    RELEASE(imageView);
+    [scrollView setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
+    _scrollView = scrollView;
+
+    // Content view
+    box = [[NSBox alloc] init];
+    [box setTitlePosition:NSNoTitle];
+    [box setBorderType:NSNoBorder];
+    [box setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [box setContentViewMargins:NSMakeSize(0.0, 0.0)];
+    [box setFrameFromContentFrame:frame];
+
+    // Popup
+    scalePopup =
+        [[NSPopUpButton alloc] initWithFrame:NSMakeRect([box frame].size.width - 58, 1, 57, 16)];
+    [scalePopup setRefusesFirstResponder:YES];
+    [scalePopup addItemWithTitle:@"10%"];
+    [scalePopup addItemWithTitle:@"20%"];
+    [scalePopup addItemWithTitle:@"30%"];
+    [scalePopup addItemWithTitle:@"40%"];
+    [scalePopup addItemWithTitle:@"50%"];
+    [scalePopup addItemWithTitle:@"60%"];
+    [scalePopup addItemWithTitle:@"70%"];
+    [scalePopup addItemWithTitle:@"80%"];
+    [scalePopup addItemWithTitle:@"90%"];
+    [scalePopup addItemWithTitle:@"100%"];
+    [scalePopup addItemWithTitle:@"200%"];
+    [scalePopup addItemWithTitle:@"300%"];
+    [scalePopup addItemWithTitle:@"400%"];
+    [scalePopup addItemWithTitle:@"500%"];
+    [scalePopup addItemWithTitle:@"600%"];
+    [scalePopup addItemWithTitle:@"700%"];
+    [scalePopup setAutoresizingMask:(NSViewMaxYMargin | NSViewMinXMargin)];
+    [scalePopup selectItemWithTitle:@"100%"];
+    [scalePopup setTarget:self];
+    [scalePopup setAction:@selector(scaleImageFromPopup:)];
+    scrollView.scaleView = scalePopup;
+
+    [box addSubview:scrollView];
+    RELEASE(scrollView);
+    [box addSubview:scalePopup];
+    RELEASE(scalePopup);
+
+    // Multipage controls
+    if ([representations count] > 1) {
+      ImageMultipageView *multipageView;
+
+      multipageView =
+          [[ImageMultipageView alloc] initWithFrame:NSMakeRect(0, 0, 19, 34)
+                                             target:self
+                                         nextAction:@selector(displayNextRepresentation:)
+                                         prevAction:@selector(displayPrevRepresentation:)];
+      scrollView.multipageView = multipageView;
+      [box addSubview:multipageView];
+      RELEASE(multipageView);
+    }
+
+    [scrollView tile];
+
+    // Window
+    NSLog(@"ImageWindow: loading image with size %.0f x %.0f.", imageSize.width, imageSize.height);
+    for (NSImageRep *rep in _image.representations) {
+      NSLog(@"Representaion: %li x %li", rep.pixelsWide, rep.pixelsHigh);
+    }
+    frame = [NSWindow frameRectForContentRect:frame styleMask:wMask];
+
+    NSSize screenSize = [[NSScreen mainScreen] visibleFrame].size;
+    BOOL fitsOnScreen = (imageSize.width  <= screenSize.width  - 64 &&
+                         imageSize.height <= screenSize.height - 64);
+
+    if (fitsOnScreen) {
+      /* Small image: open at 100% zoom, window sized to the image */
+      if (frame.size.width < 100)
+        frame.size.width = 100;
+      if (frame.size.height < 100)
+        frame.size.height = 100;
+
+      _window = [[NSWindow alloc] initWithContentRect:frame
+                                           styleMask:wMask
+                                             backing:NSBackingStoreRetained
+                                               defer:YES];
+      [_window setReleasedWhenClosed:YES];
+      [_window setDelegate:self];
+      [_window setFrame:frame display:YES];
+      [_window setMaxSize:[[NSScreen mainScreen] visibleFrame].size];
+      [_window setMinSize:NSMakeSize(100, 100)];
+      [_window setContentView:box];
+      RELEASE(box);
+      [_window setTitleWithRepresentedFilename:path];
+
+      [_window center];
+      [_window makeKeyAndOrderFront:nil];
+      [_window display];
+
+      /* Image already at 100% — just update the imageView frame for centering */
+      [_image setSize:imageSize];
+      NSSize visibleSize = [_scrollView contentSize];
+      NSSize frameSize;
+      frameSize.width  = MAX(imageSize.width,  visibleSize.width);
+      frameSize.height = MAX(imageSize.height, visibleSize.height);
+      [imageView setFrameSize:frameSize];
+      [imageView setImage:nil];
+      [imageView setImage:_image];
+      [scalePopup selectItemWithTitle:@"100%"];
+
+    } else {
+      /* Large image: clamp window to screen and scale proportionally */
+      if (imageSize.width > screenSize.width - 64)
+        frame.size.width = screenSize.width - 164;
+      if (imageSize.height > screenSize.height - 64)
+        frame.size.height = screenSize.height - 64;
+      if (frame.size.width < 100)
+        frame.size.width = 100;
+      if (frame.size.height < 100)
+        frame.size.height = 100;
+
+      _window = [[NSWindow alloc] initWithContentRect:frame
+                                           styleMask:wMask
+                                             backing:NSBackingStoreRetained
+                                               defer:YES];
+      [_window setReleasedWhenClosed:YES];
+      [_window setDelegate:self];
+      [_window setFrame:frame display:YES];
+      [_window setMaxSize:[[NSScreen mainScreen] visibleFrame].size];
+      [_window setMinSize:NSMakeSize(100, 100)];
+      [_window setContentView:box];
+      RELEASE(box);
+      [_window setTitleWithRepresentedFilename:path];
+
+      [_window center];
+      [_window makeKeyAndOrderFront:nil];
+      [_window display];
+      [self _updateImageViewFrame];
+    }
+  }
+
+  return self;
+}
+
+- (void)_removeDynamicPopupItemIfNeeded
+{
+  /* Guard against empty popup */
+  if ([scalePopup numberOfItems] == 0) return;
+
+  /* The dynamic item (if present) is always the last one and has a tag of 1 */
+  NSMenuItem *last = [[scalePopup menu] itemAtIndex:[scalePopup numberOfItems] - 1];
+  if ([last tag] == 1) {
+    [[scalePopup menu] removeItem:last];
+  }
+}
+
+- (void)_updateImageViewFrame
+{
+  NSSize visibleSize = [_scrollView contentSize];
+  NSSize baseSize    = NSMakeSize(_visibleRep.pixelsWide, _visibleRep.pixelsHigh);
+
+  /* Compute the scale factor that fits the image proportionally in the visible area */
+  double factorX = visibleSize.width  / baseSize.width;
+  double factorY = visibleSize.height / baseSize.height;
+  double factor  = MIN(factorX, factorY);
+
+  /* Cap at 600% maximum */
+  if (factor > 6.0) factor = 6.0;
+
+  NSSize scaledSize = NSMakeSize(round(baseSize.width  * factor),
+                                 round(baseSize.height * factor));
+
+  /* Update the image size */
+  [_image setSize:scaledSize];
+
+  /* Expand imageView to fill visible area so NSImageAlignCenter works */
+  NSSize frameSize;
+  frameSize.width  = MAX(scaledSize.width,  visibleSize.width);
+  frameSize.height = MAX(scaledSize.height, visibleSize.height);
+  [imageView setFrameSize:frameSize];
+  [imageView setImage:nil];
+  [imageView setImage:_image];
+
+  /* Update popup: remove old dynamic item, insert exact percentage */
+  [self _removeDynamicPopupItemIfNeeded];
+  NSInteger percent = (NSInteger)round(factor * 100.0);
+  NSString *label   = [NSString stringWithFormat:@"%ld%%", (long)percent];
+
+  /* Only add a dynamic item if the percentage isn't already in the fixed list */
+  NSInteger existingIdx = [scalePopup indexOfItemWithTitle:label];
+  if (existingIdx >= 0) {
+    [scalePopup selectItemAtIndex:existingIdx];
+  } else {
+    NSMenuItem *dynItem = [[NSMenuItem alloc] initWithTitle:label
+                                                     action:@selector(scaleImageFromPopup:)
+                                              keyEquivalent:@""];
+    [dynItem setTarget:self];
+    [dynItem setTag:1]; /* mark as dynamic so we can remove it later */
+    [[scalePopup menu] addItem:dynItem];
+    RELEASE(dynItem);
+    [scalePopup selectItemWithTitle:label];
+  }
+}
+
+- (void)scaleImageFromPopup:(id)sender
+{
+  /* Remove dynamic item before reading the selection, so indices are stable */
+  [self _removeDynamicPopupItemIfNeeded];
+
+  NSString *title = [scalePopup titleOfSelectedItem];
+  /* Parse the percentage value — strip the trailing '%' */
+  double percent = [[title substringToIndex:[title length] - 1] doubleValue];
+  double factor  = percent / 100.0;
+
+  NSSize baseSize = NSMakeSize(_visibleRep.pixelsWide, _visibleRep.pixelsHigh);
+  NSSize scaledSize = NSMakeSize(round(baseSize.width  * factor),
+                                 round(baseSize.height * factor));
+
+  /* Resize the image to the scaled size — NSImageView will stretch it */
+  [_image setSize:scaledSize];
+
+  /* Expand imageView to fill visible area so NSImageAlignCenter works */
+  NSSize visibleSize = [_scrollView contentSize];
+  NSSize frameSize;
+  frameSize.width  = MAX(scaledSize.width,  visibleSize.width);
+  frameSize.height = MAX(scaledSize.height, visibleSize.height);
+  [imageView setFrameSize:frameSize];
+  [imageView setImage:nil];   /* force redraw */
+  [imageView setImage:_image];
+}
+
+- (void)zoomIn
+{
+  /* Capture current percentage before removing any dynamic item */
+  NSString *currentTitle = [scalePopup titleOfSelectedItem];
+  if (!currentTitle) return;
+  double currentPercent  = [[currentTitle substringToIndex:[currentTitle length] - 1] doubleValue];
+
+  [self _removeDynamicPopupItemIfNeeded];
+
+  /* Find the first fixed item strictly greater than the current percentage */
+  NSInteger target = -1;
+  for (NSInteger i = 0; i < [scalePopup numberOfItems]; i++) {
+    NSString *title   = [[scalePopup itemAtIndex:i] title];
+    double itemPercent = [[title substringToIndex:[title length] - 1] doubleValue];
+    if (itemPercent > currentPercent) {
+      target = i;
+      break;
+    }
+  }
+
+  if (target >= 0) {
+    [scalePopup selectItemAtIndex:target];
+    [self scaleImageFromPopup:scalePopup];
+  }
+}
+
+- (void)zoomOut
+{
+  /* Capture current percentage before removing any dynamic item */
+  NSString *currentTitle = [scalePopup titleOfSelectedItem];
+  if (!currentTitle) return;
+  double currentPercent  = [[currentTitle substringToIndex:[currentTitle length] - 1] doubleValue];
+
+  [self _removeDynamicPopupItemIfNeeded];
+
+  /* Find the last fixed item strictly less than the current percentage */
+  NSInteger target = -1;
+  for (NSInteger i = [scalePopup numberOfItems] - 1; i >= 0; i--) {
+    NSString *title    = [[scalePopup itemAtIndex:i] title];
+    double itemPercent = [[title substringToIndex:[title length] - 1] doubleValue];
+    if (itemPercent < currentPercent) {
+      target = i;
+      break;
+    }
+  }
+
+  if (target >= 0) {
+    [scalePopup selectItemAtIndex:target];
+    [self scaleImageFromPopup:scalePopup];
+  }
+}
+
 - (void)dealloc
 {
-  RELEASE(window);
+  RELEASE(_window);
+  RELEASE(_image);
+  RELEASE(_displayImage);
   RELEASE(imagePath);
   RELEASE(attr);
-  RELEASE(rep);
 
   [super dealloc];
 }
@@ -226,24 +540,27 @@
 
 - (void)windowWillClose:(NSNotification *)notif
 {
-  if ([[notif object] isEqual:window])
-	{
-	  if (delegate && 
-		  [delegate respondsToSelector:@selector(imageWindowWillClose:)])
-		{
-		  [delegate imageWindowWillClose:self];
-		  [window setDelegate: nil];
-		  window = nil;
-	  }
-	}
+  if ([[notif object] isEqual:_window]) {
+    if (delegate && [delegate respondsToSelector:@selector(imageWindowWillClose:)]) {
+      [delegate imageWindowWillClose:self];
+      [_window setDelegate:nil];
+      _window = nil;
+    }
+  }
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)aNotification
 {
-  if( [[aNotification object] isEqual:window] )
-	{
-	  [[Inspector sharedInspector] imageWindowDidBecomeActive:self];
-	}
+  if ([[aNotification object] isEqual:_window]) {
+    [[Inspector sharedInspector] imageWindowDidBecomeActive:self];
+  }
+}
+
+- (void)windowDidResize:(NSNotification *)aNotification
+{
+  if ([[aNotification object] isEqual:_window]) {
+    [self _updateImageViewFrame];
+  }
 }
 
 - (NSString *)path
@@ -263,14 +580,19 @@
 
 - (NSString *)imageType
 {
-  return [imagePath pathExtension];
+  NSString *ext = [imagePath pathExtension];
+  if (ext) {
+    return ext;
+  }
+
+  return @"";
 }
 
-- (NSString *)imageSize
+- (NSString *)imageFileSize
 {
   int bytes = [[attr objectForKey:@"NSFileSize"] intValue];
 
-  return [NSString stringWithFormat:@"%d Bytes",bytes];
+  return [NSString stringWithFormat:@"%d Bytes", bytes];
 }
 
 - (NSString *)imageFileModificationDate
@@ -294,29 +616,157 @@
   return owner;
 }
 
-- (NSString *)imageResolution
+- (NSString *)imageWidth
 {
-  return [NSString stringWithFormat:@"%.1f x %.1f",imageSize.width,imageSize.height];
+  return [NSString stringWithFormat:@"%ld", _visibleRep.pixelsWide];
 }
 
-- (NSString *)bitsPerSample
+- (NSString *)imageHeight
 {
-  return [NSString stringWithFormat:@"%ld",[rep bitsPerSample]];
+  return [NSString stringWithFormat:@"%ld", _visibleRep.pixelsHigh];
+}
+
+- (NSString *)imageBitsPerPixel
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    return [NSString stringWithFormat:@"%ld", rep.bitsPerPixel];
+  }
+  return @"-";
+}
+
+- (NSString *)imageBitsPerSample
+{
+  return [NSString stringWithFormat:@"%ld", _visibleRep.bitsPerSample];
+}
+- (NSString *)imageNumberOfPlanes
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    return [NSString stringWithFormat:@"%ld", rep.numberOfPlanes];
+  }
+  return @"-";
+}
+
+- (NSString *)imageBytesPerPlane
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    return [NSString stringWithFormat:@"%ld", rep.bytesPerPlane];
+  }
+  return @"-";
+}
+
+- (NSString *)imageBytesPerRow
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    return [NSString stringWithFormat:@"%ld", rep.bytesPerRow];
+  }
+  return @"-";
 }
 
 - (NSString *)colorSpaceName
 {
-  return [rep colorSpaceName];
+  return [_visibleRep colorSpaceName];
 }
 
 - (NSString *)hasAlpha
 {
-  return [NSString stringWithFormat:@"%@",[rep hasAlpha]?@"Yes":@"No"];
+  return [NSString stringWithFormat:@"%@", [_visibleRep hasAlpha] ? @"Yes" : @"No"];
 }
 
-- (NSString *)imageReps
+- (NSString *)compressionType
 {
-  return [NSString stringWithFormat:@"%d",reps];
+  NSString *type = @"None";
+
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *compression = [rep valueForProperty:NSImageCompressionMethod];
+
+    switch (compression.integerValue) {
+      case NSTIFFCompressionCCITTFAX3:
+        type = @"CCITT Groups 3";
+        break;
+      case NSTIFFCompressionCCITTFAX4:
+        type = @"CCITT Groups 4";
+        break;
+      case NSTIFFCompressionLZW:
+        type = @"LZW";
+        break;
+      case NSTIFFCompressionJPEG:
+        type = @"JPEG";
+        break;
+      case NSTIFFCompressionNEXT:
+        type = @"NeXT";
+        break;
+      case NSTIFFCompressionPackBits:
+        type = @"Pack Bits";
+        break;
+      case NSTIFFCompressionOldJPEG:
+        type = @"Old JPEG";
+        break;
+      }
+  }
+  return type;
+}
+
+- (NSString *)compressionFactor
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *value = [rep valueForProperty:NSImageCompressionFactor];
+    return [NSString stringWithFormat:@"%.1f", value.floatValue];
+  }
+  return @"-";
+}
+
+- (NSString *)imageFrameCount
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *value = [rep valueForProperty:NSImageFrameCount];
+    return [NSString stringWithFormat:@"%i", value.intValue];
+  }
+  return @"-";
+}
+
+- (NSString *)imageCurrentFrame
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *value = [rep valueForProperty:NSImageCurrentFrame];
+    return [NSString stringWithFormat:@"%i", value.intValue];
+  }
+  return @"-";
+}
+- (NSString *)imageCurrentFrameDuration
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *value = [rep valueForProperty:NSImageCurrentFrameDuration];
+    return [NSString stringWithFormat:@"%.1f", value.floatValue];
+  }
+  return @"-";
+}
+//
+- (NSString *)imageGamma
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *value = [rep valueForProperty:NSImageGamma];
+    return [NSString stringWithFormat:@"%.1f", value.floatValue];
+  }
+  return @"-";
+}
+- (NSString *)imageProgressive
+{
+  if ([_visibleRep isKindOfClass:[NSBitmapImageRep class]]) {
+    NSBitmapImageRep *rep = (NSBitmapImageRep *)_visibleRep;
+    NSNumber *value = [rep valueForProperty:NSImageProgressive];
+    return [NSString stringWithFormat:@"%@", value.boolValue ? @"Yes" : @"No"];
+  }
+  return @"-";
 }
 
 @end

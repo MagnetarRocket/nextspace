@@ -20,6 +20,10 @@ Review_APPLICATION_ICON = Review.tiff
 # Resource files
 #
 Review_RESOURCE_FILES = \
+Resources/PageUp.tiff \
+Resources/PageUpH.tiff \
+Resources/PageDown.tiff \
+Resources/PageDownH.tiff \
 Resources/GenericImage.tiff \
 Resources/GIFImage.tiff \
 Resources/JPEGImage.tiff \
@@ -36,7 +40,8 @@ Resources/XPMImage.tiff
 Review_LANGUAGES = English
 Review_LOCALIZED_RESOURCE_FILES = \
 Review.gorm \
-InfoPanel.gorm
+InfoPanel.gorm \
+Inspector.gorm
 
 #
 # Header files

@@ -1,19 +1,14 @@
 #!/bin/sh
 # -*-Shell-script-*-
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit 1
-fi
-
-REPO_DIR=$1
-SPEC_FILE=${REPO_DIR}/Libraries/libobjc2/libobjc2.spec
-OBJC2_VERSION=`rpm_version ${SPEC_FILE}`
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/libobjc2.spec
+OBJC2_VERSION=`rpm_version ${SPEC_FILE} "$@"`
 
 print_H1 " Building Objective-C Runtime(libobjc2) package..."
-
 print_H2 "===== Install libobjc2 build dependencies..."
 DEPS=`rpmspec -q --buildrequires ${SPEC_FILE} | awk -c '{print $1}'`
 sudo yum -y install ${DEPS}
@@ -22,7 +17,7 @@ print_H2 "===== Downloading libobjc2 sources..."
 spectool -g -R ${SPEC_FILE}
 
 print_H2 "===== Building libobjc2 package..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
     print_OK " Building of Objective-C Runtime RPM SUCCEEDED!"

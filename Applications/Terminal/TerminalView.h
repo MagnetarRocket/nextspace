@@ -11,7 +11,10 @@
 #ifndef TerminalView_h
 #define TerminalView_h
 
+#include <stdint.h>
+
 #import <Foundation/NSFileHandle.h>
+#include "Foundation/NSObjCRuntime.h"
 #import <AppKit/NSScroller.h>
 #import <AppKit/NSView.h>
 #import <AppKit/NSMenu.h>
@@ -21,125 +24,133 @@
 
 #import "Defaults.h"
 
+#define SCROLLBACK_DEFAULT 256
+#define SCROLLBACK_MAX INT_MAX
+
 extern NSString *TerminalViewBecameIdleNotification;
 extern NSString *TerminalViewBecameNonIdleNotification;
 extern NSString *TerminalViewTitleDidChangeNotification;
 extern NSString *TerminalViewSizeDidChangeNotification;
 
-struct selection_range
-{
-  int location,length;
+struct selection_range {
+  int location, length;
 };
 
 @interface TerminalView : NSView
 {
-  Defaults     *defaults;
-  NSString     *xtermTitle;
-  NSString     *xtermIconTitle;
-  
-  NSString     *programPath;
-  NSString     *childTerminalName;
-  int          child_pid;
+  Defaults *defaults;
+  NSString *xtermTitle;
+  NSString *xtermIconTitle;
 
-  int          master_fd;
+  NSString *programPath;
+  NSString *childTerminalName;
+  int child_pid;
+
+  int master_fd;
   NSFileHandle *masterFDHandle;
-  
+
   NSObject<TerminalParser> *terminalParser;
 
   NSFont *font;
   NSFont *boldFont;
-  int    font_encoding;
-  int    boldFont_encoding;
-  BOOL   use_multi_cell_glyphs;
-  float  fx, fy, fx0, fy0;
+  int font_encoding;
+  int boldFont_encoding;
+  BOOL useMultiCellGlyphs;
+  float fx, fy, fx0, fy0;
 
   struct {
     int x0, y0, x1, y1;
   } dirty;
 
-
-  unsigned char	*write_buf;
-  int           write_buf_len;
-  int           write_buf_size;
+  unsigned char *write_buf;
+  int write_buf_len;
+  int write_buf_size;
 
   // ---
   // Scrolling
   // ---
-  NSScroller	*scroller;
-  BOOL		scroll_bottom_on_input; /* preference */
+  NSScroller *scroller;
+  BOOL shouldScrollBottomOnInput; /* preference */
+
   // Scrollback
-  screen_char_t	*sb_buffer;       /* scrollback buffer content storage */
-  int		max_sb_depth;     /* maximum scrollback size in lines */
-  int		curr_sb_depth;    /* current scrollback size in lines */
-  int		curr_sb_position; /* 0 = bottom; negative value = posision */
-  
+  screen_char_t *scrollback; /* scrollback buffer content storage */
+  int curr_sb_position;      /* 0 = bottom; negative value = posision */
+  int max_sb_depth;          /* maximum scrollback size in lines */
+  int curr_sb_depth;         /* current scrollback size in lines */
+  int alloc_sb_depth;        /* current number of lines which have allocated memory for */
+
   /* Scrolling by compositing takes a long while, so we break out of such
      loops fairly often to process other events */
   int num_scrolls;
   /* To avoid doing lots of scrolling compositing, we combine multiple
      full-screen scrolls. pending_scroll is the combined pending line delta */
   int pending_scroll;
-  
-  int		sx; // window width in characters (screen_char_t)
-  int		sy; // window height in lines?
+
+  // ---
+  // Screen - visible part of terminal contents
+  // ---
   screen_char_t *screen;
+  int screen_width;   // window width in characters (screen_char_t)
+  int screen_height;  // window height in lines
 
   int cursor_x, cursor_y;
   int current_x, current_y;
 
-  int  draw_all; /* 0=only lazy, 1=don't know, do all, 2=do all */
-  BOOL draw_cursor;
+  int draw_all; /* 0=only lazy, 1=don't know, do all, 2=do all */
+  BOOL shouldDrawCursor;
 
-  BOOL ignore_resize;
+  BOOL shouldIgnoreResize;
+  BOOL shouldUpdateTitlebar;
+  BOOL isActivityMonitorEnabled;
 
   float border_x, border_y;
 
-
   // Selection
   struct selection_range selection;
-  NSString* additionalWordCharacters;
+  NSString *additionalWordCharacters;
 
   // ------
   // Colors
   // ------
-  NSColor	*cursorColor;
-  NSUInteger	cursorStyle;
+  NSColor *cursorColor;
+  NSUInteger cursorStyle;
   // Window:Background
-  CGFloat	WIN_BG_H;
-  CGFloat	WIN_BG_S;
-  CGFloat	WIN_BG_B;
+  CGFloat WIN_BG_H;
+  CGFloat WIN_BG_S;
+  CGFloat WIN_BG_B;
 
   // Window:Selection
-  CGFloat	WIN_SEL_H;
-  CGFloat	WIN_SEL_S;
-  CGFloat	WIN_SEL_B;
+  CGFloat WIN_SEL_H;
+  CGFloat WIN_SEL_S;
+  CGFloat WIN_SEL_B;
 
   // Text:Normal
-  CGFloat	TEXT_NORM_H;
-  CGFloat	TEXT_NORM_S;
-  CGFloat	TEXT_NORM_B;
+  CGFloat TEXT_NORM_H;
+  CGFloat TEXT_NORM_S;
+  CGFloat TEXT_NORM_B;
 
   // Text:Blink
-  CGFloat	TEXT_BLINK_H;
-  CGFloat	TEXT_BLINK_S;
-  CGFloat	TEXT_BLINK_B;
+  CGFloat TEXT_BLINK_H;
+  CGFloat TEXT_BLINK_S;
+  CGFloat TEXT_BLINK_B;
 
   // Text:Bold
-  CGFloat	TEXT_BOLD_H;
-  CGFloat	TEXT_BOLD_S;
-  CGFloat	TEXT_BOLD_B;
+  CGFloat TEXT_BOLD_H;
+  CGFloat TEXT_BOLD_S;
+  CGFloat TEXT_BOLD_B;
 
   // Text:Inverse
-  CGFloat	INV_BG_H;
-  CGFloat	INV_BG_S;
-  CGFloat	INV_BG_B;
-  CGFloat	INV_FG_H;
-  CGFloat	INV_FG_S;
-  CGFloat	INV_FG_B;
+  CGFloat INV_BG_H;
+  CGFloat INV_BG_S;
+  CGFloat INV_BG_B;
+  CGFloat INV_FG_H;
+  CGFloat INV_FG_S;
+  CGFloat INV_FG_B;
 }
 
 - initWithPreferences:(id)preferences;
-- (Defaults *)preferences; // used by terminal parser
+- (Defaults *)preferences;  // used by terminal parser
+- (BOOL)resizeScrollbackBuffer:(BOOL)shouldGrow;
 
 - (NSObject<TerminalParser> *)terminalParser;
 
@@ -149,14 +160,14 @@ struct selection_range
 - (NSString *)stringRepresentation;
 
 - (void)setIgnoreResize:(BOOL)ignore;
-- (void)setBorder:(float)x :(float)y;
+- (void)setBorderX:(float)x Y:(float)y;
 
-- (void)setAdditionalWordCharacters:(NSString*)str;
+- (void)setAdditionalWordCharacters:(NSString *)str;
 
 - (void)setFont:(NSFont *)aFont;
 - (void)setBoldFont:(NSFont *)bFont;
 - (int)scrollBufferLength;
-- (void)setScrollBufferMaxLength:(int)lines;
+- (BOOL)setScrollBufferMaxLength:(int)lines;
 - (void)setScrollBottomOnInput:(BOOL)scrollBottom;
 - (void)setCursorStyle:(NSUInteger)style;
 
@@ -168,9 +179,10 @@ struct selection_range
 - (NSString *)xtermTitle;
 - (NSString *)xtermIconTitle;
 - (NSString *)programPath;
+- (void)updateProgramPath;
 - (NSString *)deviceName;
 - (NSSize)windowSize;
-  
+
 - (BOOL)isUserProgramRunning;
 
 + (void)registerPasteboardTypes;
@@ -178,31 +190,32 @@ struct selection_range
 @end
 
 @interface TerminalView (display) <TerminalScreen>
+
 - (void)updateColors:(Defaults *)prefs;
 - (void)setNeedsLazyDisplayInRect:(NSRect)r;
+
 @end
 
-/* TODO: this is ugly */
-@interface TerminalView (scrolling_2)
+@interface TerminalView (scrolling)
 - (void)setScroller:(NSScroller *)sc;
 @end
 
-@interface TerminalView (input_2)
+@interface TerminalView (Input_Output) <RunLoopEvents>
+
 - (void)readData;
+- (void)writeData;
 
 - (void)closeProgram;
 
 // Next 3 methods return PID of program
-- (int)runProgram:(NSString *)path
-    withArguments:(NSArray *)args
-     initialInput:(NSString *)d;
+- (int)runProgram:(NSString *)path withArguments:(NSArray *)args initialInput:(NSString *)d;
 - (int)runProgram:(NSString *)path
     withArguments:(NSArray *)args
       inDirectory:(NSString *)directory
      initialInput:(NSString *)d
              arg0:(NSString *)arg0;
 - (int)runShell;
+
 @end
 
 #endif
-

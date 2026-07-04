@@ -48,6 +48,7 @@
 #include <WM/core/log_utils.h>
 
 #import <Foundation/NSException.h>
+#import <Foundation/NSDebug.h>
 #import <AppKit/NSWorkspace.h>
 #import <AppKit/NSApplication.h>
 
@@ -121,7 +122,9 @@ static void _handleCFNotification(CFNotificationCenterRef center, void *observer
   [_windowManagerCenter postNotificationName:nsName object:nsObject userInfo:nsUserInfo];
 
   [nsObject release];
-  [nsUserInfo release];
+  if (nsUserInfo) {
+    [nsUserInfo release];
+  }
 }
 
 // Global notifications
@@ -178,7 +181,8 @@ static void _handleCFNotification(CFNotificationCenterRef center, void *observer
 
 - (void)dealloc
 {
-  NSLog(@"WMNotificationCenter: dealloc");
+  NSDebugLLog(@"Memory", @"WMNotificationCenter: dealloc");
+  
   CFNotificationCenterRemoveEveryObserver(_coreFoundationCenter, self);
   CFRelease(_coreFoundationCenter);
   [_remoteCenter removeObserver:self];
@@ -281,7 +285,7 @@ static void _handleCFNotification(CFNotificationCenterRef center, void *observer
   }
 
   // locally (e.g. Controller or ProcessManager)
-  if ([name hasPrefix:@"WMDid"]) {
+  if ([name hasPrefix:@"WMDid"] || [name hasPrefix:@"NSWorkspace"]) {
     WMLogWarning("[WMNC postNotification:::] - %@", convertNStoCFDictionary(info));
     [super postNotificationName:name object:object userInfo:info];
   }

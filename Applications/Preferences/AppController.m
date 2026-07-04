@@ -19,7 +19,7 @@
 // Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.
 //
 
-#import <DesktopKit/NXTDefaults.h>
+#import <SystemKit/OSEDefaults.h>
 #import <SystemKit/OSEKeyboard.h>
 #import <SystemKit/OSEMouse.h>
 #import <SystemKit/OSEScreen.h>
@@ -77,23 +77,24 @@
   // NSApplication removed arguments (-NXAutoLaunch YES) to omit flickering.
   // We've just finished launching and not active == we've autolaunched
   if ([NSApp isActive] == NO) {
-    NXTDefaults *defs = [NXTDefaults globalUserDefaults];
+    OSEDefaults *defs = [OSEDefaults globalUserDefaults];
 
-    NSLog(@"Configuring Keyboard...");
+    // NSLog(@"Configuring Keyboard...");
     [OSEKeyboard configureWithDefaults:defs];
 
-    NSLog(@"Configuring Mouse...");
+    // NSLog(@"Configuring Mouse...");
     OSEMouse *mouse = [OSEMouse new];
     [mouse setAcceleration:[defs integerForKey:OSEMouseAcceleration]
                  threshold:[defs integerForKey:OSEMouseThreshold]];
     [mouse release];
 
-    NSLog(@"Configuring Desktop background...");
-    OSEScreen *screen = [OSEScreen sharedScreen];
+    // NSLog(@"Configuring Desktop background...");
+    OSEScreen *screen = [OSEScreen new];
     CGFloat red, green, blue;
     if ([screen savedBackgroundColorRed:&red green:&green blue:&blue] == YES) {
       [screen setBackgroundColorRed:red green:green blue:blue];
     }
+    [screen release];
   } else {
     [self showPreferencesWindow];
   }
@@ -106,7 +107,7 @@
 
 - (void)applicationWillTerminate:(NSNotification *)aNotif
 {
-  [[NXTDefaults globalUserDefaults] synchronize];
+  [[OSEDefaults globalUserDefaults] synchronize];
   [prefsController release];
   [clockView removeFromSuperviewWithoutNeedingDisplay];
 }

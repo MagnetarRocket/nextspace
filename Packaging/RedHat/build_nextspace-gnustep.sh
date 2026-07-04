@@ -1,32 +1,35 @@
 #!/bin/sh
 # -*-Shell-script-*-
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
+. /Developer/Makefiles/GNUstep.sh
+. /etc/profile.d/nextspace.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit 1
-fi
-
-REPO_DIR=$1
-SPEC_FILE=${REPO_DIR}/Libraries/gnustep/nextspace-gnustep.spec
-GNUSTEP_VERSION=`rpm_version ${SPEC_FILE}`
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/nextspace-gnustep.spec
+GNUSTEP_VERSION=`rpm_version ${SPEC_FILE} "$@"`
 
 print_H1 " Building NEXTSPACE GNUstep (nextspace-gnustep) package..."
-cp ${REPO_DIR}/Libraries/gnustep/gdnc-local.service ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gdnc.service ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gdomap.interfaces ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gdomap.service ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gpbs.service ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gnustep-gui-images.tar.gz ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gnustep-gui-panels.tar.gz ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gorm-images.tar.gz ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/projectcenter-images.tar.gz ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/pc.patch ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/gorm.patch ${SOURCES_DIR}
-cp ${REPO_DIR}/Libraries/gnustep/libs-gui_* ${SOURCES_DIR}
-print_H1 " Downloading Local GNUstep Back..."
-tar zcf ${SOURCES_DIR}/back-art.tar.gz -C ${REPO_DIR}/Libraries/gnustep back-art
+cp ${PROJECT_DIR}/Libraries/gnustep/gdnc-local.service ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gdnc.service ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gdomap.interfaces ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gdomap.service ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gpbs.service ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gnustep-gui-panels.tar.gz ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gorm-images.tar.gz ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/projectcenter-images.tar.gz ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/pc.patch ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/gorm.patch ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/libs-gui_* ${RPM_SOURCES_DIR}
+cp ${PROJECT_DIR}/Libraries/gnustep/GlobalDefaults.plist ${RPM_SOURCES_DIR}
+#cp ${PROJECT_DIR}/Libraries/gnustep/gnustep-gui-images.tar.gz ${RPM_SOURCES_DIR}
+
+print_H1 " Preparing GNUstep Back..."
+tar zcf ${RPM_SOURCES_DIR}/gnustep-back.tar.gz -C ${PROJECT_DIR}/Libraries/gnustep back
+
+print_H1 " Preparing NextSpace theme..."
+tar zcf ${RPM_SOURCES_DIR}/nextspace-theme.tar.gz -C ${PROJECT_DIR}/Libraries/gnustep nextspace-theme
 
 print_H2 "===== Install GNUstep build dependencies..."
 DEPS=`rpmspec -q --buildrequires ${SPEC_FILE} | awk -c '{print $1}'`
@@ -36,7 +39,7 @@ print_H2 "===== Downloading GNUstep sources..."
 spectool -g -R ${SPEC_FILE}
 
 print_H2 "===== Building GNUstep package..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
     print_OK " Building of NEXTSPACE GNUstep RPM SUCCEEDED!"
@@ -47,6 +50,9 @@ if [ $STATUS -eq 0 ]; then
     install_rpm nextspace-gnustep-devel ${RPMS_DIR}/nextspace-gnustep-devel-${GNUSTEP_VERSION}.rpm
     mv ${RPMS_DIR}/nextspace-gnustep-devel-${GNUSTEP_VERSION}.rpm ${RELEASE_DEV}
     mv ${RPMS_DIR}/nextspace-gnustep-debuginfo-${GNUSTEP_VERSION}.rpm ${RELEASE_DEV}
+    if [ -f ${RPMS_DIR}/nextspace-gnustep-debugsource-${GNUSTEP_VERSION}.rpm ];then
+        mv ${RPMS_DIR}/nextspace-gnustep-devel-debuginfo-${GNUSTEP_VERSION}.rpm ${RELEASE_DEV}
+    fi
     if [ -f ${RPMS_DIR}/nextspace-gnustep-debugsource-${GNUSTEP_VERSION}.rpm ];then
         mv ${RPMS_DIR}/nextspace-gnustep-debugsource-${GNUSTEP_VERSION}.rpm ${RELEASE_DEV}
     fi

@@ -21,7 +21,7 @@
 
 #import <AppKit/AppKit.h>
 #import <DesktopKit/NXTAlert.h>
-#import <DesktopKit/NXTFileManager.h>
+#import <SystemKit/OSEFileManager.h>
 #import "Launcher.h"
 
 @interface WMCommandField : NSTextField
@@ -52,7 +52,7 @@
 
 - (void)dealloc
 {
-  NSLog(@"Launcher: dealloc");
+  NSDebugLLog(@"Memory", @"Launcher: dealloc");
 
   [window release];
   [savedCommand release];
@@ -97,8 +97,12 @@
   if (window == nil) {
     [NSBundle loadNibNamed:@"Launcher" owner:self];
   } else {
+    NSString *fieldValue = [commandField stringValue];
     [completionList reloadColumn:0];
-    // [completionList setTitle:@"History" ofColumn:0];
+    [completionList setTitle:@"History" ofColumn:0];
+    if (fieldValue.length > 0) {
+      [completionList selectRow:[historyList indexOfObject:fieldValue] inColumn:0];
+    }
   }
 
   [commandField selectText:nil];
@@ -145,7 +149,7 @@
   commandPath = [commandArgs objectAtIndex:0];
   [commandArgs removeObjectAtIndex:0];
 
-  NSLog(@"Running command: %@ with args %@", commandPath, commandArgs);
+  NSDebugLLog(@"Launcher", @"Running command: %@ with args %@", commandPath, commandArgs);
 
   commandTask = [NSTask new];
   [commandTask setArguments:commandArgs];
@@ -158,9 +162,10 @@
   } @catch (NSException *exception) {
     NXTRunAlertPanel(@"Run Command", @"Run command failed with exception: \'%@\'", @"Close", nil,
                      nil, [exception reason]);
-  } @finally {
-    [window close];
+    [window makeKeyAndOrderFront:self];
+    return;
   }
+  [window close];
 }
 
 - (void)runInTerminal:(id)sender
@@ -191,7 +196,7 @@
   // Create ~/Library/Workspace directory if not exsist
   if ([fm fileExistsAtPath:libPath isDirectory:&isDir] == NO) {
     if ([fm createDirectoryAtPath:libPath attributes:nil] == NO) {
-      NSLog(@"Failed to create library directory %@!", libPath);
+      NSDebugLLog(@"Launcher", @"Failed to create library directory %@!", libPath);
     }
   } else if ([fm fileExistsAtPath:histPath isDirectory:&isDir] != NO && isDir == NO) {
     historyList = [[NSMutableArray alloc] initWithContentsOfFile:histPath];
@@ -201,7 +206,7 @@
   if (historyList == nil) {
     historyList = [[NSMutableArray alloc] initWithContentsOfFile:wmHistPath];
     if (historyList == nil) {
-      NSLog(@"Failed to load history file %@", wmHistPath);
+      NSDebugLLog(@"Launcher", @"Failed to load history file %@", wmHistPath);
       historyList = [[NSMutableArray alloc] init];
     }
   }
@@ -237,14 +242,14 @@
 - (NSArray *)completionForCommand:(NSString *)command
 {
   NSMutableArray *variants = [[NSMutableArray alloc] init];
-  NXTFileManager *fm = [NXTFileManager defaultManager];
+  OSEFileManager *fm = [OSEFileManager defaultManager];
   NSString *absPath;
 
   if (!command || [command length] == 0 || [command isEqualToString:@""]) {
     return variants;
   }
 
-  // NSLog(@"completionFor: %@ - %@", command, historyList);
+  // NSDebugLLog(@"Launcher", @"completionFor: %@ - %@", command, historyList);
 
   // Go through the history first
   // for (NSString *compElement in historyList) {
@@ -254,7 +259,7 @@
   // }
 
   absPath = [fm absolutePathForPath:command];
-  // NSLog(@"Absolute command: %@ - %@", command, absPath);
+  // NSDebugLLog(@"Launcher", @"Absolute command: %@ - %@", command, absPath);
   if (absPath) {  // Absolute path exists
     NSArray *completion = [fm completionForPath:absPath isAbsolute:YES];
     for (NSString *path in completion) {
@@ -280,7 +285,7 @@
   NSString *variant;
   NSUInteger variantsCount;
 
-  // NSLog(@">>> Make completion <<<");
+  // NSDebugLLog(@"Launcher", @">>> Make completion <<<");
 
   if (commandVariants)
     [commandVariants release];
@@ -288,9 +293,8 @@
   variantsCount = [commandVariants count];
 
   if (variantsCount > 0) {
-    // NSLog(@"Completions: %lu source: %@ index: %li",
-    //       variantsCount, (completionSource == historyList ? @"History" : @"Completion"),
-    //       completionIndex);
+    NSDebugLLog(@"Launcher", @"Completions: %lu source: %@ index: %li", variantsCount,
+                (completionSource == historyList ? @"History" : @"Completion"), completionIndex);
     // Completion list handling
     if (variantsCount > 1) {
       completionIndex = (completionSource == historyList) ? -1 : completionIndex + 1;
@@ -309,7 +313,7 @@
     } else {
       variant = [command stringByExpandingTildeInPath];
     }
-    if ([[NXTFileManager defaultManager] directoryExistsAtPath:variant] &&
+    if ([[OSEFileManager defaultManager] directoryExistsAtPath:variant] &&
         [variant characterAtIndex:[variant length] - 1] != '/') {
       if ([command characterAtIndex:0] == '~') {
         variant = [variant stringByAbbreviatingWithTildeInPath];
@@ -341,7 +345,7 @@
 
 - (void)updateButtonsState
 {
-  NXTFileManager *fm = [NXTFileManager defaultManager];
+  OSEFileManager *fm = [OSEFileManager defaultManager];
   BOOL isDir;
   NSString *text;
   BOOL isEnabled = YES;
@@ -370,7 +374,7 @@
 
   switch (c) {
     case NSDownArrowFunctionKey:
-      // NSLog(@"WMCommandField key: Down");
+      // NSDebugLLog(@"Launcher", @"WMCommandField key: Down");
       completionIndex++;
       if (completionIndex >= [completionSource count]) {
         completionIndex--;
@@ -380,7 +384,7 @@
       [self updateButtonsState];
       break;
     case NSUpArrowFunctionKey:
-      // NSLog(@"WMCommandField key: Up");
+      // NSDebugLLog(@"Launcher", @"WMCommandField key: Up");
       if (completionIndex > -1)
         completionIndex--;
       if (completionIndex >= 0) {
@@ -416,7 +420,7 @@
       [self reloadCompletionList];
       break;
   }
-  // NSLog(@"WMCommandField key: %i", c);
+  // NSDebugLLog(@"Launcher", @"WMCommandField key: %i", c);
 }
 // --- Command and History browser delegate
 - (void)browser:(NSBrowser *)sender
@@ -446,6 +450,7 @@
 {
   NSInteger selRow;
   NSString *absPath;
+  NSString *fieldValue = [commandField stringValue];
   id object;
 
   if (sender != completionList)
@@ -456,7 +461,7 @@
   if (absPath == nil) {
     absPath = [completionSource objectAtIndex:completionIndex];
   }
-  if ([[commandField stringValue] characterAtIndex:0] == '~') {
+  if (fieldValue && fieldValue.length > 0 && [fieldValue characterAtIndex:0] == '~') {
     absPath = [absPath stringByAbbreviatingWithTildeInPath];
   }
 

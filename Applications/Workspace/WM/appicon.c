@@ -37,6 +37,7 @@
 #include <core/util.h>
 #include <core/log_utils.h>
 #include <core/string_utils.h>
+#include <core/file_utils.h>
 #include <core/wevent.h>
 #include <core/wuserdefaults.h>
 
@@ -62,6 +63,8 @@
 #ifdef USE_DOCK_XDND
 #include "xdnd.h"
 #endif
+
+#include <Workspace+WM.h>
 
 /*
  * icon_file for the dock is got from the preferences file by
@@ -156,6 +159,10 @@ WAppIcon *wAppIconCreateForDock(WScreen *scr, const char *command, const char *w
 
 void create_appicon_for_application(WApplication *wapp, WWindow *wwin)
 {
+  /* Transient windows should never get their own appicon */
+  if (wwin->transient_for != None && wwin->transient_for != wwin->screen->root_win) {
+    return;
+  }
   /* Try to create an icon from the dock or clip */
   create_appicon_from_dock(wwin, wapp, wapp->main_window);
 
@@ -536,7 +543,7 @@ void appIconMouseDown(WObjDescriptor *desc, XEvent *event)
   if (aicon->flags.editing || WCHECK_STATE(WSTATE_MODAL))
     return;
 
-  if (IsDoubleClick(scr, event)) {
+  if (wEventIsDoubleClick(scr, event)) {
     /* Middle or right mouse actions were handled on first click */
     WMLogInfo("[appicon.c] Appicon Double-click\n");
     if (event->xbutton.button == Button1)
@@ -1131,6 +1138,10 @@ static Window _createIconForSliding(WScreen *scr, int x, int y, const char *imag
   RImage *rimage = NULL;
   Pixmap pixmap = 0, mask = 0;
 
+  if (image_path == NULL) {
+    WMLogInfo("[appicon.c] _createIconForSliding Could not create image. No image path specified.");
+  }
+
   // Window
   attribs.save_under = True;
   attribs.override_redirect = True;
@@ -1142,20 +1153,25 @@ static Window _createIconForSliding(WScreen *scr, int x, int y, const char *imag
                             scr->w_depth, CopyFromParent, scr->w_visual, vmask, &attribs);
 
   // Image
-  if (image_path != NULL) {
-    rimage = RLoadImage(scr->rcontext, image_path, 0);
+  rimage = WSCreateRasterImage(image_path, scr);
+  if (!rimage) {
+    image_path = WMAbsolutePathForFile(wPreferences.image_paths, "NXApplication.tiff");
+    rimage = WSCreateRasterImage(image_path, scr);
+  }
+  if (rimage) {
     RConvertImageMask(scr->rcontext, rimage, &pixmap, &mask, 158);
     RReleaseImage(rimage);
+    if (pixmap && mask) {
+      XSetWindowBackgroundPixmap(dpy, image_win, pixmap);
+      XShapeCombineMask(dpy, image_win, ShapeBounding, 0, 0, mask, ShapeSet);
+      XFreePixmap(dpy, pixmap);
+      XFreePixmap(dpy, mask);
+    } else {
+      WMLogInfo("[appicon.c] _createIconForSliding Failed to load image at path: %s", image_path);
+    }
   } else {
-    WMLogInfo("[appicon.c] _createIconForSliding Could not create image, image_path = %s",
-              image_path);
+    WMLogInfo("[appicon.c] _createIconForSliding Failed to load image at path: %s", image_path);
   }
-
-  XSetWindowBackgroundPixmap(dpy, image_win, pixmap);
-  XShapeCombineMask(dpy, image_win, ShapeBounding, 0, 0, mask, ShapeSet);
-
-  XFreePixmap(dpy, pixmap);
-  XFreePixmap(dpy, mask);
 
   XClearWindow(dpy, image_win);
 

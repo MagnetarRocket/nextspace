@@ -9,7 +9,7 @@ $(TOOL_NAME)_OBJC_FILES = disktool_main.m
 $(TOOL_NAME)_NEEDS_GUI = no
 
 ADDITIONAL_INCLUDE_DIRS += `pkg-config --cflags udisks2` `pkg-config --cflags dbus-1`
-ADDITIONAL_OBJCFLAGS += -DWITH_UDISKS
+ADDITIONAL_OBJCFLAGS +=
 ADDITIONAL_LDFLAGS += -lSystemKit
 
 include $(GNUSTEP_MAKEFILES)/tool.make

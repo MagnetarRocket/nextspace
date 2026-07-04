@@ -62,16 +62,13 @@
 
 static NSString *WorkspaceVersion = @"0.8";
 
-//============================================================================
-// Notifications
-//============================================================================
-
-// Inspectors
+// Inspector notifications
 #import "Workspace.h"
 NSString *WMFolderSortMethodDidChangeNotification = @"WMFolderSortMethodDidChangeNotification";
 NSString *WMFilePermissionsDidChangeNotification = @"WMFilePermissionsDidChangeNotification";
 NSString *WMFileOwnerDidChangeNotification = @"WMFileOwnerDidChangeNotification";
 
+// Workspace Notifications
 static NSString *WMSessionShouldFinishNotification = @"WMSessionShouldFinishNotification";
 static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNotification";
 
@@ -113,12 +110,12 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   inspectorsPath =
       [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"Inspectors.bundle"];
 
-  // NSLog(@"[Controller] Inspectors: %@", inspectorsPath);
+  // NSDebugLLog(@"Controller", @"[Controller] Inspectors: %@", inspectorsPath);
 
   inspectorsBundle = [[NSBundle alloc] initWithPath:inspectorsPath];
 
-  // NSLog(@"[Controller] Inspectors Class: %@",
-  //       [inspectorsBundle principalClass]);
+  // NSDebugLLog(@"Controller", @"[Controller] Inspectors Class: %@",
+  //             [inspectorsBundle principalClass]);
   inspector = [[[inspectorsBundle principalClass] alloc] init];
 }
 
@@ -263,7 +260,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
     }
   }
 
-  [[NXTDefaults userDefaults] setObject:windows forKey:@"SavedWindows"];
+  [[OSEDefaults userDefaults] setObject:windows forKey:@"SavedWindows"];
 
   [windows release];
   [fileViewers release];
@@ -274,7 +271,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
 - (void)_restoreWindows
 {
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
   NSArray *savedWindows = [df objectForKey:@"SavedWindows"];
   NSMutableArray *winViews = [NSMutableArray new];
   NSMutableDictionary *winViewInfo;
@@ -327,12 +324,17 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   }
 
   if (rootViewerWindow == nil) {
-    NXTDefaults *df = [NXTDefaults userDefaults];
+    OSEDefaults *df = [OSEDefaults userDefaults];
+    NSString *preferredViewer = [df objectForKey:@"PreferredViewer"];
+
+    if (!preferredViewer) {
+      preferredViewer = @"Browser";
+    }
 
     WMLogWarning("No saved root FileViewer window. Open default with viewer type: %@",
-                 convertNStoCF([df objectForKey:@"PreferredViewer"]));
+                 convertNStoCF(preferredViewer));
 
-    fv = [self newViewerRootedAt:@"/" viewer:[df objectForKey:@"PreferredViewer"] isRoot:YES];
+    fv = [self newViewerRootedAt:@"/" viewer:preferredViewer isRoot:YES];
     [fv displayPath:NSHomeDirectory() selection:nil sender:self];
     rootViewerWindow = [fv window];
     rootViewer = fv;
@@ -360,29 +362,65 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
 - (void)_saveRunningApplications
 {
-  [[NXTDefaults userDefaults] setObject:[self _undockedApplicationsList]
+  [[OSEDefaults userDefaults] setObject:[self _undockedApplicationsList]
                                  forKey:@"SavedApplications"];
 }
 
 - (void)_startSavedApplications
 {
   NSArray *savedApps;
-  savedApps = [[NXTDefaults userDefaults] objectForKey:@"SavedApplications"];
+  NSString *appName;
+  NSString *command;
+  savedApps = [[OSEDefaults userDefaults] objectForKey:@"SavedApplications"];
 
   for (NSDictionary *appInfo in savedApps) {
-    if ([self _isApplicationRunning:[appInfo objectForKey:@"Name"]] == NO) {
-      [self _executeCommand:[appInfo objectForKey:@"Command"]];
+    appName = [appInfo objectForKey:@"Name"];
+    if (appName && [self _isApplicationRunning:appName] == NO) {
+      command = appInfo[@"Command"];
+      if ([command isAbsolutePath] != NO) {
+        [self _executeCommand:command];
+      }
     }
   }
 }
 
 - (void)_finishTerminateProcess
 {
+  // Hide Dock
+  wDockHideIcons(wDefaultScreen()->dock);
+  if (recycler) {
+    [[recycler appIcon] close];
+    [recycler release];
+  }
+  [workspaceBadge release];
+
+  // Remove monitored paths and associated data (NSWorkspace)
+  for (NSString *dirPath in _appDirs) {
+    [fileSystemMonitor removePath:dirPath];
+  }
+  TEST_RELEASE(_appDirs);
+  [fileSystemMonitor removePath:_extPreferencesPath];
+  TEST_RELEASE(_extPreferencesPath);
+  _extPreferencesPath = nil;
+  TEST_RELEASE(_extPreferences);
+  _extPreferences = nil;
+  [fileSystemMonitor removePath:_appListPath];
+  TEST_RELEASE(_appListPath);
+  _appListPath = nil;
+  TEST_RELEASE(_appList);
+  _appList = nil;
+
   // Filesystem monitor
   if (fileSystemMonitor) {
     [fileSystemMonitor pause];
     [fileSystemMonitor terminate];
   }
+
+  // Media and media manager
+  // NSDebugLLog(@"Controller", @"OSEMediaManager RC:%lu", [mediaManager retainCount]);
+  [mediaAdaptor ejectAllRemovables];
+  [mediaManager release];  //  mediaAdaptor released also
+  [mediaOperations release];
 
   // We don't need to handle events on quit.
   [[NSNotificationCenter defaultCenter] removeObserver:self];
@@ -395,23 +433,9 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   // Quit Window Manager - stop runloop and make cleanup
   // wShutdown(WMExitMode);
 
-  // Hide Dock
-  wDockHideIcons(wDefaultScreen()->dock);
-  if (recycler) {
-    [[recycler appIcon] close];
-    [recycler release];
-  }
-  [workspaceBadge release];
-
-  // Media and media manager
-  // NSLog(@"OSEMediaManager RC:%lu", [mediaManager retainCount]);
-  [mediaAdaptor ejectAllRemovables];
-  [mediaManager release];  //  mediaAdaptor released also
-  [mediaOperations release];
-
   // NXTSystem objects declared in Workspace+WM.h
-  [systemPower stopEventsMonitor];
-  [systemPower release];
+  // [systemPower stopEventsMonitor];
+  // [systemPower release];
 
   // System Beep
   if (bellSound) {
@@ -423,12 +447,8 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   TEST_RELEASE(_wrappers);
   TEST_RELEASE(_iconMap);
   TEST_RELEASE(_launched);
-  TEST_RELEASE(_appListPath);
-  TEST_RELEASE(_applications);
-  TEST_RELEASE(_extPrefPath);
-  TEST_RELEASE(_extPreferences);
-
-  [[NXTDefaults userDefaults] synchronize];
+  
+  [[OSEDefaults userDefaults] synchronize];
 
   // Quit NSApplication runloop
   [NSApp stop:self];
@@ -556,6 +576,9 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
 @implementation Controller
 
+//============================================================================
+#pragma mark - Creation
+//============================================================================
 - (FileViewer *)newViewerRootedAt:(NSString *)path viewer:(NSString *)viewerType isRoot:(BOOL)root
 {
   NSFileManager *fm = [NSFileManager defaultManager];
@@ -581,7 +604,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 - (FileViewer *)openNewViewerIfNotExistRootedAt:(NSString *)path
 {
   FileViewer *fv;
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
 
   for (fv in fileViewers) {
     if ([[fv rootPath] isEqualToString:path]) {
@@ -598,13 +621,13 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 //============================================================================
-// NSApplication delegate
+#pragma mark - NSApplication delegate
 //============================================================================
 
 - (BOOL)application:(NSApplication *)app openFile:(NSString *)filename
 {
   FileViewer *fv;
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
 
   fv = [self newViewerRootedAt:filename viewer:[df objectForKey:@"PreferredViewer"] isRoot:NO];
 
@@ -639,8 +662,8 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   // NSUpdateDynamicServices();
 
   // Detect lid close/open events
-  systemPower = [OSEPower new];
-  [systemPower startEventsMonitor];
+  // systemPower = [OSEPower sharedPower];
+  // [systemPower startEventsMonitor];
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   [nc addObserver:self
          selector:@selector(lidDidChange:)
@@ -669,7 +692,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
   // Init Workspace's tools
   mediaOperations = [[NSMutableDictionary alloc] init];
-  // [self mediaManager];
+  [self mediaManager];
   fileSystemMonitor = nil;
   console = nil;
   procPanel = nil;
@@ -695,19 +718,22 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
   // OSEMediaManager
   // For future use
-  [nc addObserver:self selector:@selector(diskDidAdd:) name:OSEDiskDisappeared object:mediaAdaptor];
+  [nc addObserver:self
+         selector:@selector(diskDidAdd:)
+             name:OSEMediaDriveDidRemoveNotification
+           object:mediaAdaptor];
   [nc addObserver:self
          selector:@selector(diskDidEject:)
-             name:OSEDiskDisappeared
+             name:OSEMediaDriveDidRemoveNotification
            object:mediaAdaptor];
   // Operations
   [nc addObserver:self
          selector:@selector(mediaOperationDidStart:)
-             name:OSEMediaOperationDidStart
+             name:OSEMediaOperationDidStartNotification
            object:mediaAdaptor];
   [nc addObserver:self
          selector:@selector(mediaOperationDidEnd:)
-             name:OSEMediaOperationDidEnd
+             name:OSEMediaOperationDidEndNotification
            object:mediaAdaptor];
 
   [mediaAdaptor checkForRemovableMedia];
@@ -718,6 +744,8 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
   // Show Dock
   wDockShowIcons(wDefaultScreen()->dock);
+
+  [recycler updateIconImage];
 
   // Start docked applications with `AutoLaunch = Yes`
   wDockDoAutoLaunch(wDefaultScreen()->dock, 0);
@@ -752,63 +780,77 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
 {
   NSApplicationTerminateReply terminateReply;
+  NSString *terminateMode;
 
   wDefaultScreen()->flags.ignore_focus_events = 1;
 
   switch (NXTRunAlertPanel(_(@"Log Out"), _(@"Do you really want to log out?"), _(@"Log out"),
                            _(@"Power off"), _(@"Cancel"))) {
     case LogOut:
-    {
-      [[NSApp mainMenu] close];
-      _isQuitting = [procManager terminateAllBGOperations];
-      if (_isQuitting != NO) {
-        // Save running applications
-        [self _saveRunningApplications];
-        _isQuitting = [procManager terminateAllApps];
-        if (_isQuitting == NO) {
-          NXTRunAlertPanel(_(@"Log Out"), _(@"'%@' application request to cancel Log Out."), _(@"Dismiss"), nil, nil,
-                           [self activeApplication][@"NSApplicationName"]);
-        }
-      }
-
-      if (_isQuitting == NO) {
-        terminateReply = NSTerminateCancel;
-      } else {
-        // Close Workspace windows, hide Dock, quit WM
-        [self _finishTerminateProcess];
         terminateReply = NSTerminateNow;
         ws_quit_code = WSLogoutOnQuit;
-      }
-    } break;
+      break;
     case PowerOff:
-    {
-      [[NSApp mainMenu] close];
-      _isQuitting = [procManager terminateAllBGOperations];
-      if (_isQuitting != NO) {
-        // Save running applications
-        [self _saveRunningApplications];
-        _isQuitting = [procManager terminateAllApps];
-        if (_isQuitting == NO) {
-          NXTRunAlertPanel(_(@"Power Off"), _(@"'%@' application request to cancel Power Off."),
-                           _(@"Dismiss"), nil, nil, [self activeApplication][@"NSApplicationName"]);
-        }
-      }
-      if (_isQuitting == NO) {
-        terminateReply = NSTerminateCancel;
-      } else {
-        [self _finishTerminateProcess];
         terminateReply = NSTerminateNow;
         ws_quit_code = WSPowerOffOnQuit;
-
-      }
-    } break;
+      break;
     default:
-      _isQuitting = NO;
       terminateReply = NSTerminateCancel;
       break;
   }
 
-  if (_isQuitting == NO) {
+  if (terminateReply == NSTerminateNow) {
+    terminateMode = (ws_quit_code == WSPowerOffOnQuit) ? @"Power Off" : @"Log Out";
+
+    // NSDebugLLog(@"Controller", @"Controller: sending NSWorkspaceWillPowerOffNotification");
+    // Give a chance to apps to ask for more time before quit
+    // Notice that this notification also will be sent by GSServiceManager with forwardInvocation:
+    // of terminate: method.
+    [[[NSWorkspace sharedWorkspace] notificationCenter]
+        postNotificationName:NSWorkspaceWillPowerOffNotification
+                      object:nil];
+    // Wait for [[NSWorkspace sharedWorkspace] extendPowerOffBy:] call from apps.
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.1]];
+
+    if (powerOffTimer && [powerOffTimer isValid]) {
+      NSLog(@"Waiting for %i seconds", (powerOffTimeout / 1000));
+      [[NSRunLoop currentRunLoop] runMode:NSModalPanelRunLoopMode beforeDate:[NSDate distantFuture]];
+      // NSTimeInterval timeInterval = (powerOffTimeout / 1000.0);
+      // NSInteger result;
+      // result = NXTRunAlertPanel(terminateMode, @"%@ will be completed in %i seconds...", @"Cancel",
+      //                           nil, nil, terminateMode, timeInterval, terminateMode);
+      // if (result == NSAlertDefaultReturn) {
+      //   powerOffTimeout = 0;
+      //   [powerOffTimer invalidate];
+      //   powerOffTimer = nil;
+      //   terminateReply = NSTerminateCancel;
+      // }
+    }
+
+    if (terminateReply != NSTerminateCancel) {
+      _isQuitting = [procManager terminateAllBGOperations];
+      if (_isQuitting != NO) {
+        // Save running applications
+        [self _saveRunningApplications];
+        _isQuitting = [procManager terminateAllApps];
+        if (_isQuitting == NO) {
+          NXTRunAlertPanel(terminateMode, @"'%@' application requested to cancel %@.", @"Dismiss",
+                           nil, nil, [self activeApplication][@"NSApplicationName"], terminateMode);
+          terminateReply = NSTerminateCancel;
+        } else {
+          // Close Workspace windows, hide Dock, quit WM
+          [[NSApp mainMenu] close];
+          [self _finishTerminateProcess];
+        }
+      } else {
+        terminateReply = NSTerminateCancel;
+      }
+    }
+  }
+
+  [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
+
+  if (terminateReply == NSTerminateCancel) {
     [[NSApp mainMenu] display];
     // FIXME: restore Workspace focus. It's not correct from user POV - managed application
     // may want to have focus to review unsaved data. For now it's better not to have two app
@@ -828,7 +870,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   if (_isQuitting != NO)
     return;
 
-  // NSLog(@"Activating Workspace from Controller!");
+  // NSDebugLLog(@"Controller", @"Activating Workspace from Controller!");
   [NSApp activateIgnoringOtherApps:YES];
 }
 
@@ -853,6 +895,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 //============================================================================
+#pragma mark - NSApp related
 // Access to Workspace data via NSApp
 //============================================================================
 - (FileViewer *)rootViewer
@@ -949,13 +992,13 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 //============================================================================
-// Appicon badges
+#pragma mark - Appicon badges
 //============================================================================
 - (void)createWorkspaceBadge
 {
   NSString *currentWorkspace;
 
-  if ([[NXTDefaults userDefaults] boolForKey:@"ShowWorkspaceInDock"] == NO) {
+  if ([[OSEDefaults userDefaults] boolForKey:@"ShowWorkspaceInDock"] == NO) {
     return;
   }
 
@@ -984,7 +1027,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   NSDictionary *info = [aNotification userInfo];
   NSString *currentWorkspace;
 
-  if ([[NXTDefaults userDefaults] boolForKey:@"ShowWorkspaceInDock"] != NO) {
+  if ([[OSEDefaults userDefaults] boolForKey:@"ShowWorkspaceInDock"] != NO) {
     if (!workspaceBadge) {
       [self createWorkspaceBadge];
     } else {
@@ -1036,19 +1079,12 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 //============================================================================
-// Application menu
+#pragma mark - Application menu
 //============================================================================
 
 - (void)hideOtherApplications:(id)sender
 {
-  Window xWindow = (Window)[GSCurrentServer() windowDevice:[[NSApp keyWindow] windowNumber]];
-  NSDictionary *info =
-      @{@"WindowID" : [NSNumber numberWithUnsignedLong:xWindow], @"ApplicationName" : @"Workspace"};
-
-  [[NSDistributedNotificationCenter defaultCenter]
-      postNotificationName:CF_NOTIFICATION(WMShouldHideOthersNotification)
-                    object:@"GSWorkspaceNotification"
-                  userInfo:info];
+  [self hideOtherApplications];
 }
 
 // Info
@@ -1141,7 +1177,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 - (void)newViewer:(id)sender
 {
   FileViewer *fv;
-  NXTDefaults *df = [NXTDefaults userDefaults];
+  OSEDefaults *df = [OSEDefaults userDefaults];
 
   fv = [self newViewerRootedAt:@"/" viewer:[df objectForKey:@"PreferredViewer"] isRoot:NO];
   [[fv window] makeKeyAndOrderFront:self];
@@ -1242,6 +1278,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
     }
   } else {
     wDockShowIcons(scr->dock);
+    [recycler updateIconImage];
     wScreenUpdateUsableArea(scr);
     if (scr->dock->mapped) {
       [sender setTitle:@"Hide"];
@@ -1259,6 +1296,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
     }
   } else {
     wDockUncollapse(scr->dock);
+    [recycler updateIconImage];
     if (!scr->dock->collapsed) {
       [sender setTitle:@"Collapse"];
     }
@@ -1284,20 +1322,16 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 //--- Validation
+// FileViewer-related validation processed in FileViewer.m
 - (BOOL)validateMenuItem:(id<NSMenuItem>)menuItem
 {
   NSString *menuTitle = [[menuItem menu] title];
   FileViewer *fileViewer;
-  // NSString   *selectedPath;
 
   if (_isQuitting != NO)
     return NO;
 
   fileViewer = [self fileViewerForWindow:[NSApp keyWindow]];
-  // if (fileViewer) {
-  //   selectedPath = [fileViewer absolutePath];
-  // }
-  // NSLog(@"Validate menu: %@ item: %@", menuTitle, [menuItem title]);
 
   if ([menuTitle isEqualToString:@"File"]) {
     if ([[menuItem title] isEqualToString:@"Empty Recycler"]) {
@@ -1308,12 +1342,21 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
   } else if ([menuTitle isEqualToString:@"Dock"]) {
     if ([[menuItem title] isEqualToString:@"Collapse"] ||
         [[menuItem title] isEqualToString:@"Uncollapse"]) {
+      if (wDefaultScreen()->dock->collapsed) {
+        [menuItem setTitle:@"Uncollapse"];
+      } else {
+        [menuItem setTitle:@"Collapse"];
+      }
       if (!wDefaultScreen()->dock->mapped) {
         return NO;
       }
     }
-    if ([[menuItem title] isEqualToString:@"Hide"] && !wDefaultScreen()->dock->mapped) {
-      [menuItem setTitle:@"Show"];
+    if ([[menuItem title] isEqualToString:@"Hide"] || [[menuItem title] isEqualToString:@"Show"]) {
+      if (wDefaultScreen()->dock->mapped) {
+        [menuItem setTitle:@"Hide"];
+      } else {
+        [menuItem setTitle:@"Show"];
+      }
     }
   } else if ([menuTitle isEqualToString:@"Icon Yard"]) {
     if ([[menuItem title] isEqualToString:@"Hide"] && !wDefaultScreen()->flags.icon_yard_mapped) {
@@ -1345,7 +1388,8 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 }
 
 //============================================================================
-// OSEMediaManager events (alert panels, Processes-Background updates).
+#pragma mark - OSEMediaManager events
+// alert panels, Processes-Background updates
 //============================================================================
 - (void)diskDidAdd:(NSNotification *)notif
 {
@@ -1366,11 +1410,12 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
     NXTRunAlertPanel([info objectForKey:@"Title"], [info objectForKey:@"Message"], nil, nil, nil);
   } else {
     Mounter *bgop = [[Mounter alloc] initWithInfo:info];
+    NSString *operationKey = [NSString stringWithFormat:@"%@-%@", info[@"Operation"], info[@"ID"]];
 
-    [mediaOperations setObject:bgop forKey:[bgop source]];
+    [mediaOperations setObject:bgop forKey:operationKey];
     [bgop release];
 
-    NSLog(@"[Contoller media-start] <%@> %@ [%@]", [info objectForKey:@"Title"],
+    NSDebugLLog(@"Controller", @"[Contoller media-start] <%@> %@ [%@]", [info objectForKey:@"Title"],
           [info objectForKey:@"Message"], [bgop source]);
   }
 }
@@ -1379,24 +1424,28 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 {
   NSDictionary *info = [notif userInfo];
   NSString *source = [info objectForKey:@"UNIXDevice"];
-  Mounter *bgop = [mediaOperations objectForKey:source];
+  NSString *operation = info[@"Operation"];
+  NSString *operationKey = [NSString stringWithFormat:@"%@-%@", operation, info[@"ID"]];
+  Mounter *bgop = [mediaOperations objectForKey:operationKey];
 
-  if ([[info objectForKey:@"Success"] isEqualToString:@"false"] && bgop) {
-    [bgop destroyOperation:info];
-  } else if (bgop) {
-    if (_isQuitting) {
+  NSLog(@"[Controller] media operation completed successfuly. INFO: %@", info);
+  if (bgop) {
+    if ([[info objectForKey:@"Success"] isEqualToString:@"false"]) {
       [bgop destroyOperation:info];
     } else {
-      [bgop finishOperation:info];
+      if (_isQuitting) {
+        [bgop destroyOperation:info];
+      } else {
+        [bgop finishOperation:info];
+      }
     }
-    [mediaOperations removeObjectForKey:source];
-  } else  // probably disk ejected without unmounting
-  {
+    [mediaOperations removeObjectForKey:operationKey];
+  } else {
     [NSApp activateIgnoringOtherApps:YES];
     NXTRunAlertPanel([info objectForKey:@"Title"], [info objectForKey:@"Message"], nil, nil, nil);
   }
 
-  NSLog(@"[Contoller media-end] <%@> %@ [%@]", [info objectForKey:@"Title"],
+  NSDebugLLog(@"Controller", @"[Contoller media-end] <%@> %@ [%@]", [info objectForKey:@"Title"],
         [info objectForKey:@"Message"], source);
 }
 
@@ -1406,7 +1455,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 - (void)lidDidChange:(NSNotification *)aNotif
 {
   OSEDisplay *builtinDisplay = nil;
-  OSEScreen *screen = [OSEScreen new];
+  OSEScreen *screen = [[OSEScreen sharedScreen] retain];
 
   for (OSEDisplay *d in [screen connectedDisplays]) {
     if ([d isBuiltin]) {
@@ -1417,10 +1466,10 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 
   if (builtinDisplay) {
     if (![systemPower isLidClosed] && ![builtinDisplay isActive]) {
-      NSLog(@"Workspace: activating display %@", [builtinDisplay outputName]);
+      NSDebugLLog(@"Controller", @"Workspace: activating display %@", [builtinDisplay outputName]);
       [screen activateDisplay:builtinDisplay];
     } else if ([systemPower isLidClosed] && [builtinDisplay isActive]) {
-      NSLog(@"Workspace: DEactivating display %@", [builtinDisplay outputName]);
+      NSDebugLLog(@"Controller", @"Workspace: DEactivating display %@", [builtinDisplay outputName]);
       [screen deactivateDisplay:builtinDisplay];
     }
   }
@@ -1434,8 +1483,9 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 {
   NSInteger result;
 
-  // NSLog(@"WMShowAlertPanel thread: %@ (main: %@) mode: %@", [NSThread currentThread],
-  //       [NSThread mainThread], [[NSRunLoop currentRunLoop] currentMode]);
+  // NSDebugLLog(@"Controller", @"WMShowAlertPanel thread: %@ (main: %@) mode: %@",
+  //             [NSThread currentThread], [NSThread mainThread],
+  //             [[NSRunLoop currentRunLoop] currentMode]);
 
   result = NXTRunAlertPanel([alertInfo objectForKey:@"Title"], [alertInfo objectForKey:@"Message"],
                             [alertInfo objectForKey:@"DefaultButton"],
@@ -1451,7 +1501,7 @@ static NSString *WMComputerShouldGoDownNotification = @"WMComputerShouldGoDownNo
 - (void)ringBell
 {
   if (bellSound == nil) {
-    NXTDefaults *defs = [NXTDefaults globalUserDefaults];
+    OSEDefaults *defs = [OSEDefaults globalUserDefaults];
     NSString *bellPath = [defs objectForKey:@"NXSystemBeep"];
     if (bellPath == nil || [[NSFileManager defaultManager] fileExistsAtPath:bellPath] == NO) {
       bellPath = @"/usr/NextSpace/Sounds/Bonk.snd";

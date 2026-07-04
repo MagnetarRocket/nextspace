@@ -42,6 +42,7 @@
 #import <AppKit/NSApplication.h>
 
 #import <DesktopKit/NXTAlert.h>
+#import <DesktopKit/NXTOpenPanel.h>
 
 #import "Login.h"
 
@@ -100,7 +101,7 @@
       
   self = [super init];
       
-  defaults = [[NXTDefaults alloc] initDefaultsWithPath:NSUserDomainMask
+  defaults = [[OSEDefaults alloc] initDefaultsWithPath:NSUserDomainMask
                                                 domain:@"Login"];
 
   bundle = [NSBundle bundleForClass:[self class]];
@@ -116,9 +117,12 @@
   struct group *grp;
   int i = 0;
   BOOL isAdmin = NO;
-  
+
   grp = getgrnam("wheel");
-  while (grp->gr_mem[i] != NULL) {
+  if (grp == NULL) {
+    grp = getgrnam("adm");
+  }
+  while (grp && grp->gr_mem[i] != NULL) {
     printf("[Login] wheel member: %s\n", grp->gr_mem[i]);
     if (!strcmp(grp->gr_mem[i], [NSUserName() cString])) {
       isAdmin = YES;
@@ -132,7 +136,7 @@
 
 - (void)awakeFromNib
 {
-  systemDefaults = [[NXTDefaults alloc]
+  systemDefaults = [[OSEDefaults alloc]
                      initDefaultsWithPath:NSSystemDomainMask
                                    domain:@"Login"];
 
@@ -209,18 +213,15 @@
   NSLog(@"Set LogIn Hook: %@", [sender className]);
   if ([sender isKindOfClass:[NSTextField class]] != NO) {
     hookPath = [sender stringValue];
-  }
-  else if ([sender isKindOfClass:[NSButton class]] != NO) {
-    NSOpenPanel *panel = [NSOpenPanel openPanel];
+  } else if ([sender isKindOfClass:[NSButton class]] != NO) {
+    NXTOpenPanel *panel = [NXTOpenPanel openPanel];
 
     [panel setCanChooseDirectories:NO];
     [panel setAllowsMultipleSelection:NO];
     [panel setTitle:@"Set Login Hook"];
     [panel setShowsHiddenFiles:NO];
 
-    if ([panel runModalForDirectory:NSHomeDirectory()
-                               file:@""
-                              types:nil] == NSOKButton) {
+    if ([panel runModalForDirectory:NSHomeDirectory() file:@"" types:nil] == NSOKButton) {
       hookPath = [panel filename];
     }
   }
@@ -230,8 +231,7 @@
     if ([sender isKindOfClass:[NSTextField class]] != NO) {
       [loginHookField setStringValue:@""];
     }
-  }
-  else {
+  } else {
     if ([sender isKindOfClass:[NSTextField class]] == NO) {
       [loginHookField setStringValue:hookPath];
     }
@@ -242,23 +242,20 @@
 - (IBAction)setLogoutHook:(id)sender
 {
   NSString *hookPath = nil;
-  
+
   NSLog(@"Set LogOut Hook: %@", [sender className]);
-  
+
   if ([sender isKindOfClass:[NSTextField class]] != NO) {
     hookPath = [sender stringValue];
-  }
-  else if ([sender isKindOfClass:[NSButton class]] != NO) {
-    NSOpenPanel *panel = [NSOpenPanel openPanel];
+  } else if ([sender isKindOfClass:[NSButton class]] != NO) {
+    NXTOpenPanel *panel = [NXTOpenPanel openPanel];
 
     [panel setCanChooseDirectories:NO];
     [panel setAllowsMultipleSelection:NO];
     [panel setTitle:@"Set Logout Hook"];
     [panel setShowsHiddenFiles:NO];
 
-    if ([panel runModalForDirectory:NSHomeDirectory()
-                               file:@""
-                              types:nil] == NSOKButton) {
+    if ([panel runModalForDirectory:NSHomeDirectory() file:@"" types:nil] == NSOKButton) {
       hookPath = [panel filename];
     }
   }
@@ -266,12 +263,11 @@
   // Clear textfield with wrong
   if ([self _hookIsValid:hookPath] == NO) {
     if ([sender isKindOfClass:[NSTextField class]] != NO) {
-      [loginHookField setStringValue:@""];
+      [logoutHookField setStringValue:@""];
     }
-  }
-  else {
+  } else {
     if ([sender isKindOfClass:[NSTextField class]] == NO) {
-      [loginHookField setStringValue:hookPath];
+      [logoutHookField setStringValue:hookPath];
     }
     [defaults setObject:hookPath forKey:@"LogoutHook"];
     if ([(NSControl *)[logoutHookField nextKeyView] isEnabled] != NO)
@@ -287,13 +283,12 @@
   [systemDefaults setObject:[NSNumber numberWithInteger:[sender state]]
                      forKey:@"RememberLastLoggedInUser"];
   [systemDefaults synchronize];
-  
-  [[NSDistributedNotificationCenter
-     notificationCenterForType:GSPublicNotificationCenterType]
-    postNotificationName:@"LoginDefaultsDidChangeNotification"
-                  object:@"Preferences"
-                userInfo:nil
-      deliverImmediately:YES];
+
+  [[NSDistributedNotificationCenter notificationCenterForType:GSPublicNotificationCenterType]
+      postNotificationName:@"LoginDefaultsDidChangeNotification"
+                    object:@"Preferences"
+                  userInfo:nil
+        deliverImmediately:YES];
 }
 - (IBAction)setDisplayHostName:(id)sender
 {
@@ -302,13 +297,12 @@
   [systemDefaults setObject:[NSNumber numberWithInteger:[sender state]]
                      forKey:@"DisplayHostName"];
   [systemDefaults synchronize];
-  
-  [[NSDistributedNotificationCenter
-     notificationCenterForType:GSPublicNotificationCenterType]
-    postNotificationName:@"LoginDefaultsDidChangeNotification"
-                  object:@"Preferences"
-                userInfo:nil
-      deliverImmediately:YES];
+
+  [[NSDistributedNotificationCenter notificationCenterForType:GSPublicNotificationCenterType]
+      postNotificationName:@"LoginDefaultsDidChangeNotification"
+                    object:@"Preferences"
+                  userInfo:nil
+        deliverImmediately:YES];
 }
 
 @end

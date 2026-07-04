@@ -1,32 +1,32 @@
 #!/bin/sh
 # -*-Shell-script-*-
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit 1
+if [ "${OS_ID}" = "fedora" ]; then
+	${ECHO} "No need to build - installing 'libdispatch-devel' from Fedora repository..."
+	sudo dnf -y install libdispatch-devel || exit 1
+	exit 0
 fi
 
-REPO_DIR=$1
-SPEC_FILE=${REPO_DIR}/Libraries/libdispatch/libdispatch.spec
-DISPATCH_VERSION=`rpm_version ${SPEC_FILE}`
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/libdispatch.spec
+DISPATCH_VERSION=`rpm_version ${SPEC_FILE} "$@"`
 
 # libdispatch
 print_H1 " Building Grand Central Dispatch (libdispatch) package..."
-cp ${REPO_DIR}/Libraries/libdispatch/libdispatch-dispatch.h.patch ${SOURCES_DIR}
-
 print_H2 "===== Install libdispatch build dependencies..."
 DEPS=`rpmspec -q --buildrequires ${SPEC_FILE} | awk -c '{print $1}'`
 sudo yum -y install ${DEPS}
 
 print_H2 "===== Downloading libdispatch sources..."
 VER=`rpmspec -q --qf "%{version}:" ${SPEC_FILE} | awk -F: '{print $1}'`
-curl -L https://github.com/apple/swift-corelibs-libdispatch/archive/swift-${VER}-RELEASE.tar.gz -o ${SOURCES_DIR}/libdispatch-${VER}.tar.gz
+curl -L https://github.com/apple/swift-corelibs-libdispatch/archive/swift-${VER}-RELEASE.tar.gz -o ${RPM_SOURCES_DIR}/libdispatch-${VER}.tar.gz
 spectool -g -R ${SPEC_FILE}
 
 print_H2 "===== Building libdispatch package..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
     print_OK " Building of Grand Central Dispatch library RPM SUCCEEDED!"

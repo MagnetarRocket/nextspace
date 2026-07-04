@@ -21,7 +21,9 @@
 // Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.
 //
 
-#import <SystemKit/OSEScreen.h>
+#import <AppKit/AppKitExceptions.h>
+#import <GNUstepGUI/GSDisplayServer.h>
+
 #import <SystemKit/OSEDisplay.h>
 #import <SystemKit/OSEMouse.h>
 #import "NXTAlert.h"
@@ -205,7 +207,6 @@
 - (void)awakeFromNib
 {
   NSDictionary *selectedAttrs;
-  // NSText       *fieldEditor;
 
   maxButtonWidth = ([panel frame].size.width - 16 - 10) / 3;
   minButtonWidth = [defaultButton frame].size.width;
@@ -221,13 +222,11 @@
   [messageView setSelectable:YES];
   [messageView setAlignment:NSCenterTextAlignment];
   [messageView setTextContainerInset:NSMakeSize(0,0)];
-  [[panel contentView] addSubview:messageView];
-  [messageView release];
   
   selectedAttrs = @{NSBackgroundColorAttributeName:[NSColor controlLightHighlightColor]};
-  // fieldEditor = [panel fieldEditor:YES forObject:messageView];
-  // [(NSTextView *)fieldEditor setSelectedTextAttributes:selectedAttrs];
   [messageView setSelectedTextAttributes:selectedAttrs];
+
+  systemScreen = [OSEScreen sharedScreen];
 }
 
 - (void)dealloc
@@ -240,6 +239,18 @@
 - (NSPanel *)panel
 {
   return panel;
+}
+
+- (void)setAccessoryView:(NSView *)view
+{
+  if (accessoryView) {
+    [accessoryView removeFromSuperview];
+  }
+
+  [[panel contentView] addSubview:view];
+  accessoryView = view;
+
+  [self sizeToFitScreen];
 }
 
 // --- Utility
@@ -256,9 +267,14 @@
                            withinSelectedCharacterRange:textRange
                                         inTextContainer:[view textContainer]
                                               rectCount:&rectCount];
-  for (int i = 0; i < rectCount; i++) {
-    textRect.size.height += rectArray[i].size.height;
-  }
+  // if (rectArray) {
+    for (int i = 0; i < rectCount; i++) {
+      textRect.size.height += rectArray[i].size.height;
+    }
+  // } else {
+  //   textRect = [view frame];
+  // }
+
   return textRect;
 }
 
@@ -267,7 +283,6 @@
   NSRect   aFrame, bFrame;
   NSSize   cSize;
   CGFloat  maxWidth = 0.0, buttonWidth;
-  CGFloat  xShift;
   CGFloat  interButtonsOffset;
   CGFloat  panelEdgeOffset;
   NSButton *button;
@@ -294,12 +309,16 @@
     button = [buttons objectAtIndex:i];
       
     aFrame = [button frame];
-    xShift = aFrame.size.width - maxWidth;
-    aFrame.origin.x = panel.frame.size.width - (maxWidth + maxWidth*i);
+    aFrame.origin.x = panel.frame.size.width - (maxWidth + maxWidth * i);
     aFrame.origin.x -= (BUTTONS_SPACING * i) + BUTTONS_OFFSET;
     aFrame.size.width = maxWidth;
     [button setFrame:aFrame];
-  }  
+  }
+}
+
+- (void)sizeToFitScreen
+{
+  [self sizeToFitScreenSize:[systemScreen sizeInPixels]];
 }
 
 - (void)sizeToFitScreenSize:(NSSize)screenSize
@@ -316,7 +335,7 @@
   
   textRect = [self rectForView:messageView];
 
-  if (textRect.size.height > messageFrame.size.height) {
+  if (textRect.size.height >= messageFrame.size.height) {
     [messageView setAlignment:NSLeftTextAlignment];
     panelFrame.size.height = emptyPanelHeight + textRect.size.height;
     while (panelFrame.size.height >= maxPanelHeight && [font pointSize] >= 11.0) {
@@ -334,9 +353,8 @@
   // Screen size possibly was changed after application start.
   // GNUstep information about screen size is obsolete. Adopt origin.y to
   // GNUstep screen coordinates.
-  OSEScreen  *screen = [[OSEScreen new] autorelease];
   OSEMouse   *mouse = [[OSEMouse new] autorelease];
-  OSEDisplay *display = [screen displayAtPoint:[mouse locationOnScreen]];
+  OSEDisplay *display = [systemScreen displayAtPoint:[mouse locationOnScreen]];
 
   if (display) {
     panelFrame.origin.x = display.frame.origin.x;
@@ -351,7 +369,31 @@
     panelFrame.origin.y += [[panel screen] frame].size.height - screenSize.height;
     panelFrame.origin.x = (screenSize.width - panelFrame.size.width)/2;
   }
-  
+
+  // Accessory view
+  if (accessoryView) {
+    NSRect avFrame, mvFrame;
+    NSButton *button = buttons[0];
+    CGFloat additionalHeight;
+
+    // Setup accessory view frame
+    avFrame = accessoryView.frame;
+    avFrame.size.width = panelFrame.size.width + 4;
+    avFrame.origin.x = -2;
+    avFrame.origin.y = button.frame.origin.y + button.frame.size.height + 10;
+    [accessoryView setFrame:avFrame];
+
+    // Enlarge panel height
+    additionalHeight = avFrame.size.height + 10;
+    panelFrame.size.height += additionalHeight;
+    panelFrame.origin.y -= additionalHeight;
+
+    // Move message view up
+    mvFrame = messageView.frame;
+    mvFrame.origin.y += additionalHeight;
+    [messageView setFrame:mvFrame];
+  }
+
   [panel setFrame:panelFrame display:NO];
 
   // Buttons
@@ -360,11 +402,69 @@
 
 // --- Actions
 
+- (NSInteger)runModalForWindow:(NSWindow *)theWindow
+{
+  NSModalSession theSession = 0;
+  NSInteger code = NSRunContinuesResponse;
+  NSEvent	*event;
+
+  NSLog(@"NXTAlert-runModalForWindow");
+
+  @try {
+    NSDate *limit;
+    GSDisplayServer *srv;
+    BOOL done = NO;
+
+    theSession = [NSApp beginModalSessionForWindow:theWindow];
+    limit = [NSDate distantPast];
+    // limit = [NSDate dateWithTimeIntervalSinceNow:0.5];
+    srv = GSCurrentServer();
+
+    while (code == NSRunContinuesResponse) {
+      // limit = [NSDate dateWithTimeIntervalSinceNow:0.1];
+      // Try to handle events for this session, discarding others.
+      // code = [NSApp runModalSession:theSession];
+      // if (code == NSRunContinuesResponse) {
+        // Wait until there are more events to handle.
+        event = DPSGetEvent(srv, NSAnyEventMask, limit, NSModalPanelRunLoopMode);
+        if (event != nil) {
+          NSWindow *eventWindow = [event window];
+
+          if (eventWindow == theWindow || [eventWindow worksWhenModal] == YES /*||
+              [event type] != NSPeriodic*/) {
+            // [NSApp sendEvent:event];
+            // [NSApp updateWindows];
+            [eventWindow sendEvent:event];
+            NSLog(@"NSSendEvent: %@", event);
+            // if ([[NSApp windows] indexOfObjectIdenticalTo:theWindow] == NSNotFound ||
+            //     ![theWindow isVisible]) {
+            //   [NSApp stopModal];
+            //   code = 0;
+            // }
+          }
+        }
+
+        // }
+    }
+
+    [NSApp endModalSession:theSession];
+  } @catch (NSException *localException) {
+    if (theSession != 0) {
+      [NSApp endModalSession:theSession];
+      [theWindow close];
+    }
+    if ([[localException name] isEqual:NSAbortModalException] == NO) {
+      [localException raise];
+    }
+    code = NSRunAbortedResponse;
+  }
+
+  return code;
+}
+
 - (void)show
 {
-  OSEScreen *screen = [[OSEScreen new] autorelease];
-
-  [self sizeToFitScreenSize:[screen sizeInPixels]];
+  [self sizeToFitScreen];
   [panel makeFirstResponder:defaultButton];
   [panel makeKeyAndOrderFront:self];
 }
@@ -374,20 +474,34 @@
   NSInteger result;
   
   [self show];
-  
   result = [NSApp runModalForWindow:panel];
   [panel orderOut:self];
   
   return result;
 }
 
+
+- (void)setButtonsTarget:(id)target
+{
+  for (NSButton *button in buttons) {
+    [button setTarget:target];
+  }
+}
+- (void)setButtonsAction:(SEL)action
+{
+  for (NSButton *button in buttons) {
+    [button setAction:action];
+  }
+}
+
 - (void)buttonPressed:(id)sender
 {
+  
   if ([NSApp modalWindow] != panel) {
     NSLog(@"NXAalert panel button pressed when not in modal loop.");
     return;
   }
-  
+
   [NSApp stopModalWithCode:[sender tag]];
 }
 

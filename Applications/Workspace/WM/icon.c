@@ -118,6 +118,9 @@ static void _iconSettingsObserver(CFNotificationCenterRef center,
      * stuff */
     XClearArea(dpy, icon->core->window, 0, 0, icon->core->width, icon->core->height, True);
   } else if (CFStringCompare(name, WMDidChangeIconTileSettings, 0) == 0) {
+    if (icon->owner && icon->owner->wm_instance && !strcmp(icon->owner->wm_instance, "Workspace")) {
+      return;
+    }
     update_icon_pixmap(icon);
     XClearArea(dpy, icon->core->window, 0, 0, 1, 1, True);
   }
@@ -728,7 +731,7 @@ static void get_rimage_icon_from_icon_win(WIcon *icon)
   RImage *image;
 
   /* Create the new RImage */
-  image = get_window_image_from_x11(icon->icon_win);
+  image = wNETWMImageFromWindow(icon->icon_win);
 
   /* Free the icon info */
   unset_icon_image(icon);
@@ -826,6 +829,17 @@ void wIconPaint(WIcon *icon)
   if (!icon || !icon->core || !icon->core->screen_ptr)
     return;
 
+  // Don't paint Recycler icon
+  if (icon->core->window) {
+    XClassHint *class_hint = XAllocClassHint();
+    XGetClassHint(dpy, icon->core->window, class_hint);
+    if (class_hint->res_name != NULL && !strcmp(class_hint->res_name, "Recycler")) {
+      XFree(class_hint);
+      return;
+    }
+    XFree(class_hint);
+  }
+
   WScreen *scr = icon->core->screen_ptr;
 
   XClearWindow(dpy, icon->core->window);
@@ -873,7 +887,7 @@ static void miniwindowMouseDown(WObjDescriptor *desc, XEvent *event)
   if (WCHECK_STATE(WSTATE_MODAL))
     return;
 
-  if (IsDoubleClick(icon->core->screen_ptr, event)) {
+  if (wEventIsDoubleClick(icon->core->screen_ptr, event)) {
     miniwindowDblClick(desc, event);
     return;
   }

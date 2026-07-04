@@ -1,5 +1,5 @@
 /*
- *  AppController.m 
+ *  AppController.m
  */
 
 #import <DesktopKit/NXTOpenPanel.h>
@@ -22,16 +22,15 @@
 
 - (id)init
 {
-  if ((self = [super init]))
-    {
-      images = [[NSMutableArray alloc] init];
-    }
+  if ((self = [super init])) {
+    imageWindows = [[NSMutableArray alloc] init];
+  }
   return self;
 }
 
 - (void)dealloc
 {
-  RELEASE(images);
+  RELEASE(imageWindows);
 
   [super dealloc];
 }
@@ -52,26 +51,24 @@
 
 - (BOOL)application:(NSApplication *)application openFile:(NSString *)fileName
 {
-  [NSApp activateIgnoringOtherApps: YES];
-  return [self openImageAtPath:fileName]; 
+  [NSApp activateIgnoringOtherApps:YES];
+  return [self openImageAtPath:fileName];
 }
 
 - (void)showPrefPanel:(id)sender
 {
-  if (preferences == nil)
-    {
-      preferences = [[PrefController alloc] init];
-    }
+  if (preferences == nil) {
+    preferences = [[PrefController alloc] init];
+  }
 
   [preferences show];
 }
 
 - (void)showInspector:(id)sender
 {
-  if (inspector == nil)
-    {
-      inspector = [Inspector sharedInspector];
-    }
+  if (inspector == nil) {
+    inspector = [Inspector sharedInspector];
+  }
 
   [inspector show];
 }
@@ -82,54 +79,125 @@
 {
   ImageWindow *win = [[ImageWindow alloc] initWithContentsOfFile:path];
 
-  if (win)
-    {
-      [win setDelegate:self];
-      [images addObject:win];
-      return YES;
-    }
+  if (win) {
+    [win setDelegate:self];
+    [imageWindows addObject:win];
+    return YES;
+  }
   return NO;
 }
 
 - (void)openImage:(id)sender
 {
-  int          result;
-  NSArray      *fileTypes = [NSImage imageFileTypes];
+  int result;
+  NSArray *fileTypes = [NSImage imageFileTypes];
   NXTOpenPanel *openPanel = [NXTOpenPanel openPanel];
-  NSString     *pth = [[NSUserDefaults standardUserDefaults]
-                        objectForKey:@"OpenDir"];
+  NSString *pth = [[NSUserDefaults standardUserDefaults] objectForKey:@"OpenDir"];
 
   [openPanel setCanChooseDirectories:NO];
   [openPanel setAllowsMultipleSelection:NO];
-  result = [openPanel runModalForDirectory:pth
-                                      file:nil
-                                     types:fileTypes];
+  result = [openPanel runModalForDirectory:pth file:nil types:fileTypes];
 
   if (result == NSOKButton) {
-    [[NSUserDefaults standardUserDefaults] setObject:[openPanel directory]
-                                              forKey:@"OpenDir"];
-    
+    [[NSUserDefaults standardUserDefaults] setObject:[openPanel directory] forKey:@"OpenDir"];
+
     for (NSString *imageFile in [openPanel filenames]) {
       if (![self openImageAtPath:imageFile]) {
-        NXTRunAlertPanel(@"Error when opening file", 
-                         @"Couldn't open %@", @"OK", nil, nil,imageFile);
+        NXTRunAlertPanel(@"Error when opening file", @"Couldn't open %@", @"OK", nil, nil,
+                         imageFile);
       }
     }
-  }  
+  }
+}
+
+- (void)saveImageAs:(id)sender
+{
+  NXTSavePanel *savePanel = [NXTSavePanel new];
+  NSString *fileName;
+
+  if (savePanel) {
+    NSWindow *keyWindow = [NSApp keyWindow];
+
+    [savePanel runModal];
+    fileName = [savePanel filename];
+    if (fileName && [fileName length] > 0) {
+      NSString *pathExtension = [fileName pathExtension];
+      if (pathExtension.length == 0) {
+        fileName = [fileName stringByAppendingPathExtension:@"tiff"];
+      } else {
+        fileName =
+            [[fileName stringByDeletingPathExtension] stringByAppendingPathExtension:@"tiff"];
+      }
+    }
+
+    for (ImageWindow *win in imageWindows) {
+      if (win.window == keyWindow) {
+        // NSData *data = [win.image TIFFRepresentation];
+        NSBitmapImageRep *imgRep = [[win.image representations] objectAtIndex:0];
+        NSData *data = [imgRep representationUsingType:NSPNGFileType properties:nil];
+        if (data) {
+          [data writeToFile:fileName atomically:NO];
+        } else {
+          NSLog(@"Can't save image - no data found!");
+        }
+        break;
+      }
+    }
+
+    [savePanel release];
+    savePanel = nil;
+  }
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem
+{
+  if ([menuItem action] == @selector(zoomIn:) || [menuItem action] == @selector(zoomOut:)) {
+    NSWindow *keyWindow = [NSApp keyWindow];
+    for (ImageWindow *win in imageWindows) {
+      if (win.window == keyWindow) return YES;
+    }
+    return NO;
+  }
+  return YES;
+}
+
+- (void)zoomIn:(id)sender
+{
+  NSWindow *keyWindow = [NSApp keyWindow];
+  for (ImageWindow *win in imageWindows) {
+    if (win.window == keyWindow) {
+      [win zoomIn];
+      return;
+    }
+  }
+}
+
+- (void)zoomOut:(id)sender
+{
+  NSWindow *keyWindow = [NSApp keyWindow];
+  for (ImageWindow *win in imageWindows) {
+    if (win.window == keyWindow) {
+      [win zoomOut];
+      return;
+    }
+  }
 }
 
 - (void)imageWindowWillClose:(id)sender
 {
-  if (sender)
-    {
-      [images removeObject:sender];
-      AUTORELEASE(sender);
-    }
+  if (sender) {
+    [imageWindows removeObject:sender];
+    AUTORELEASE(sender);
+  }
+
+  if (imageWindows.count == 0) {
+    [inspector imageWindowDidBecomeActive:nil];
+  }
 }
 
 - (void)servicesOpenFileOrDirectory:(NSPasteboard *)pb
-                           userData:(NSString *)ud 
-			      error:(NSString **)msg
+                           userData:(NSString *)ud
+                              error:(NSString **)msg
 {
   // TODO : be able to deal with a real property list
   // i.e. to deal with the different the property lists types :
@@ -137,62 +205,53 @@
   // - an array of string (this is what we do at this time)
   // (what to do with dictionary or data ?)
 
-  id  fileNamesPl;
+  id fileNamesPl;
   int i, count;
 
   fileNamesPl = [pb propertyListForType:NSFilenamesPboardType];
 
-  if ([fileNamesPl respondsToSelector: @selector(count)] == NO)
-    {
-      // we only deal with NSArray
-      // we cannot do a test on the class because the class is NSDistantObject
-      NSRunAlertPanel(@"Process service request",
-		      @"Unknown user data", @"OK", nil, nil,nil);
-      return;
-    }
+  if ([fileNamesPl respondsToSelector:@selector(count)] == NO) {
+    // we only deal with NSArray
+    // we cannot do a test on the class because the class is NSDistantObject
+    NSRunAlertPanel(@"Process service request", @"Unknown user data", @"OK", nil, nil, nil);
+    return;
+  }
 
   count = [fileNamesPl count];
 
-  for (i = 0; i < count; i++)
-    {
-      NSFileManager *manager = [NSFileManager defaultManager];
-      NSString      *imageFile = [fileNamesPl objectAtIndex: i];
+  for (i = 0; i < count; i++) {
+    NSFileManager *manager = [NSFileManager defaultManager];
+    NSString *imageFile = [fileNamesPl objectAtIndex:i];
 
-      if ([manager fileExistsAtPath:imageFile])
-	{
-	  if (![self application:NSApp openFile:imageFile])
-	    {
-	      NSRunAlertPanel(@"Review service", 
-			      @"Couldn't open %@", @"OK", nil, nil,imageFile);
-	    }
-	}
-      else
-	{
-	  NSLog(@"Can't open %@", imageFile);
-	}
+    if ([manager fileExistsAtPath:imageFile]) {
+      if (![self application:NSApp openFile:imageFile]) {
+        NSRunAlertPanel(@"Review service", @"Couldn't open %@", @"OK", nil, nil, imageFile);
+      }
+    } else {
+      NSLog(@"Can't open %@", imageFile);
     }
+  }
 }
 
 - (void)setDefaultSize:(id)sender
 {
   NSWindow *mainWindow = [[NSApplication sharedApplication] mainWindow];
 
-  if (mainWindow)
-    {
-      [mainWindow saveFrameUsingName:@"default ImagesWindow"];
-    }
+  if (mainWindow) {
+    [mainWindow saveFrameUsingName:@"default ImagesWindow"];
+  }
 }
 
 - (void)showInfoPanel:(id)sender
 {
   if (!infoPanel) {
     if (![NSBundle loadNibNamed:@"InfoPanel" owner:self]) {
-      NSLog (@"Failed to load InfoPanel.nib");
+      NSLog(@"Failed to load InfoPanel.nib");
       return;
     }
-   [infoPanel center];
+    [infoPanel center];
   }
- [infoPanel makeKeyAndOrderFront:nil];
+  [infoPanel makeKeyAndOrderFront:nil];
 }
 
 @end

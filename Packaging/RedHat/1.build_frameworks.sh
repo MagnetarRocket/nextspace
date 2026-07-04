@@ -3,18 +3,14 @@
 # run this script as has appropriate rights.
 #
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit
-fi
+prepare_redhat_environment || error_exit "Failed to setup building environment. Exiting..."
 
-prepare_environment
-
-REPO_DIR=$1
 LOG_FILE=${CWD}/frameworks_build.log
-SPEC_FILE=${REPO_DIR}/Frameworks/nextspace-frameworks.spec
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/nextspace-frameworks.spec
 
 print_H1 " Building NEXTSPACE Frameworks package..."
 
@@ -26,18 +22,18 @@ sudo yum -y install ${DEPS}
 
 print_H2 "===== Downloading nextspace-frameworks sources..."
 source /Developer/Makefiles/GNUstep.sh
-cd ${REPO_DIR}/Frameworks && make dist
+cd ${PROJECT_DIR}/Frameworks && make dist
 cd $CWD
-mv ${REPO_DIR}/nextspace-frameworks-${FRAMEWORKS_VERSION}.tar.gz ${SOURCES_DIR}
+mv ${PROJECT_DIR}/nextspace-frameworks-${FRAMEWORKS_VERSION}.tar.gz ${RPM_SOURCES_DIR}
 spectool -g -R ${SPEC_FILE}
 
 print_H2 "===== Building nextspace-frameworks package..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
     print_OK " Building of NEXTSPACE Frameworks RPM SUCCEEDED!"
     print_H2 "===== Installing nextspace-frameworks RPMs..."
-    FRAMEWORKS_VERSION=`rpm_version ${SPEC_FILE}`
+    FRAMEWORKS_VERSION=`rpm_version ${SPEC_FILE} "$@"`
     
     install_rpm nextspace-frameworks ${RPMS_DIR}/nextspace-frameworks-${FRAMEWORKS_VERSION}.rpm
     mv ${RPMS_DIR}/nextspace-frameworks-${FRAMEWORKS_VERSION}.rpm ${RELEASE_USR}

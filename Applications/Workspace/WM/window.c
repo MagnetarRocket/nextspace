@@ -72,6 +72,7 @@
 #include "iconyard.h"
 #include "application.h"
 #include "appmenu.h"
+#include "xmodifier.h"
 
 #ifdef USE_MWM_HINTS
 #include "motif.h"
@@ -174,8 +175,13 @@ void wWindowDestroy(WWindow *wwin)
   int i, win_count;
   CFIndex idx;
 
-  if (wwin->screen->cmap_window == wwin)
+  if (!wwin || !wwin->screen) {
+    return;
+  }
+
+  if (wwin->screen->cmap_window && wwin->screen->cmap_window == wwin) {
     wwin->screen->cmap_window = NULL;
+  }
 
   if (wwin->screen->notificationCenter) {
     CFNotificationCenterRemoveObserver(wwin->screen->notificationCenter, wwin,
@@ -210,38 +216,39 @@ void wWindowDestroy(WWindow *wwin)
       XFlush(dpy);
     }
   }
-
-  if (wwin->normal_hints)
+  if (wwin->normal_hints) {
     XFree(wwin->normal_hints);
-
-  if (wwin->wm_hints)
+  }
+  if (wwin->wm_hints) {
     XFree(wwin->wm_hints);
-
-  if (wwin->wm_instance)
+  }
+  if (wwin->wm_instance) {
     XFree(wwin->wm_instance);
-
-  if (wwin->wm_class)
+  }
+  if (wwin->wm_class) {
     XFree(wwin->wm_class);
-
-  if (wwin->wm_gnustep_attr)
+  }
+  if (wwin->wm_gnustep_attr) {
     wfree(wwin->wm_gnustep_attr);
-
-  if (wwin->cmap_windows)
+  }
+  if (wwin->cmap_windows) {
     XFree(wwin->cmap_windows);
-
-  XDeleteContext(dpy, wwin->client_win, w_global.context.client_win);
-
-  if (wwin->frame)
+  }
+  if (wwin->client_win) {
+    XDeleteContext(dpy, wwin->client_win, w_global.context.client_win);
+  }
+  if (wwin->frame) {
     wFrameWindowDestroy(wwin->frame);
-
+  }
   if (wwin->icon) {
     RemoveFromStackList(wwin->icon->core);
     wIconDestroy(wwin->icon);
     if (wPreferences.auto_arrange_icons)
       wArrangeIcons(wwin->screen, True);
   }
-  if (wwin->net_icon_image)
+  if (wwin->net_icon_image) {
     RReleaseImage(wwin->net_icon_image);
+  }
 
   wrelease(wwin);
 }
@@ -637,7 +644,7 @@ WWindow *wManageWindow(WScreen *scr, Window window)
     return NULL;
   }
 
-  wm_state = PropGetWindowState(window);
+  wm_state = wPropertiesGetWindowState(window);
 
   /* if it's startup and the window is unmapped, don't manage it */
   if (scr->flags.startup && wm_state < 0 && wattribs.map_state == IsUnmapped) {
@@ -669,7 +676,7 @@ WWindow *wManageWindow(WScreen *scr, Window window)
 #endif
 
   /* Get hints and other information in properties */
-  PropGetWMClass(window, &wwin->wm_class, &wwin->wm_instance);
+  wPropertiesGetWMClass(window, &wwin->wm_class, &wwin->wm_instance);
 
   /* setup descriptor */
   wwin->client_win = window;
@@ -687,7 +694,7 @@ WWindow *wManageWindow(WScreen *scr, Window window)
   if (wwin->wm_class != NULL && strcmp(wwin->wm_class, "GNUstep") == 0)
     wwin->flags.is_gnustep = 1;
 
-  if (!PropGetGNUstepWMAttr(window, &wwin->wm_gnustep_attr))
+  if (!wPropertiesGetGNUstepWMAttr(window, &wwin->wm_gnustep_attr))
     wwin->wm_gnustep_attr = NULL;
 
   if (wwin->wm_class != NULL && strcmp(wwin->wm_class, "DockApp") == 0) {
@@ -695,7 +702,7 @@ WWindow *wManageWindow(WScreen *scr, Window window)
     withdraw = True;
   }
 
-  wwin->client_leader = PropGetClientLeader(window);
+  wwin->client_leader = wPropertiesGetClientLeader(window);
   if (wwin->client_leader != None)
     wwin->main_window = wwin->client_leader;
 
@@ -727,7 +734,7 @@ WWindow *wManageWindow(WScreen *scr, Window window)
     wwin->group_id = None;
   }
 
-  PropGetProtocols(window, &wwin->protocols);
+  wPropGetProtocols(window, &wwin->protocols);
 
   if (!XGetTransientForHint(dpy, window, &wwin->transient_for)) {
     wwin->transient_for = None;
@@ -746,6 +753,14 @@ WWindow *wManageWindow(WScreen *scr, Window window)
 
   /* get geometry stuff */
   wClientGetNormalHints(wwin, &wattribs, True, &x, &y, &width, &height);
+
+  /* Some applications create placeholder windows with 1x1 size (e.g. VirtualBox internal windows).
+     Don't manage those initial 1x1 windows. */
+  if (width <= 1 && height <= 1 && !wwin->flags.is_dockapp) {
+    wWindowDestroy(wwin);
+    XUngrabServer(dpy);
+    return NULL;
+  }
 
   /* get colormap windows */
   GetColormapWindows(wwin);
@@ -790,8 +805,8 @@ WWindow *wManageWindow(WScreen *scr, Window window)
 
 #define ADEQUATE(x) ((x) != None && (x) != wwin->client_win && (x) != fPtr->leader)
 
-    /* // only enter here if PropGetWMClass() succeds */
-    PropGetWMClass(wwin->main_window, &class, &instance);
+    /* // only enter here if wPropertiesGetWMClass() succeds */
+    wPropertiesGetWMClass(wwin->main_window, &class, &instance);
     buffer = wstrconcatdot(instance, class);
 
     for (CFIndex i = 0; i < CFArrayGetCount(scr->fakeGroupLeaders); i++) {
@@ -1555,7 +1570,8 @@ void wUnmanageWindow(WWindow *wwin, Bool restore, Bool destroyed)
 
   oapp = wApplicationOf(wwin->main_window);
 
-  if (wasFocused) {
+  // `wasFocused` doesn't guarantee that `new_focused_window` isn't NULL.
+  if (wasFocused && new_focused_window != NULL) {
     WApplication *napp = wApplicationOf(new_focused_window->main_window);
 
     if (owner && new_focused_window != owner) {
@@ -1612,7 +1628,9 @@ void wUnmanageWindow(WWindow *wwin, Bool restore, Bool destroyed)
 
   wNETCleanupFrameExtents(wwin);
 
-  wWindowDestroy(wwin);
+  if (!wwin->flags.destroyed) {
+    wWindowDestroy(wwin);
+  }
   XFlush(dpy);
 }
 
@@ -2143,6 +2161,14 @@ void wWindowConfigure(WWindow *wwin, int req_x, int req_y, int req_width, int re
       wFrameWindowConfigure(wwin->frame, req_x, req_y, req_width, h);
     }
 
+    /*
+     * When the frame is resized/moved, the X server repositions a client
+     * with non-NorthWest gravity inside the frame to compensate (visible as
+     * a GravityNotify with xev), leaving it at the wrong offset.
+     */
+    if (wwin->normal_hints->win_gravity != NorthWestGravity)
+      XMoveWindow(dpy, wwin->client_win, 0, wwin->frame->top_width);
+    
     if (!(req_height > wwin->frame->core->height || req_width > wwin->frame->core->width))
       XResizeWindow(dpy, wwin->client_win, req_width, req_height);
 
@@ -2574,9 +2600,8 @@ void wWindowSetKeyGrabs(WWindow *wwin)
       XGrabKey(dpy, key->keycode, key->modifier | LockMask, wwin->frame->core->window, True,
                GrabModeAsync, GrabModeAsync);
 #ifdef NUMLOCK_HACK
-      /* Also grab all modifier combinations possible that include,
-       * LockMask, ScrollLockMask and NumLockMask, so that keygrabs
-       * work even if the NumLock/ScrollLock key is on.
+      /* Also grab all modifier combinations possible that include, LockMask, ScrollLockMask and
+       * NumLockMask, so that keygrabs work even if the NumLock/ScrollLock key is on.
        */
       wHackedGrabKey(key->keycode, key->modifier, wwin->frame->core->window, True, GrabModeAsync,
                      GrabModeAsync);
@@ -2586,15 +2611,7 @@ void wWindowSetKeyGrabs(WWindow *wwin)
              GrabModeAsync);
   }
 
-  XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Super_L), AnyModifier, wwin->client_win, True,
-           GrabModeAsync, GrabModeAsync);
-  XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Super_R), AnyModifier, wwin->client_win, True,
-           GrabModeAsync, GrabModeAsync);
-  XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), AnyModifier, wwin->client_win, True, GrabModeAsync,
-           GrabModeAsync);
-  XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_R), AnyModifier, wwin->client_win, True, GrabModeAsync,
-           GrabModeAsync);
-  /* wApplicationMenuSetKeyGrabs(wwin); */
+  wApplicationMenuSetKeyGrabs(wwin);
 }
 
 void wWindowResetMouseGrabs(WWindow *wwin)
@@ -2704,7 +2721,7 @@ WMagicNumber wWindowGetSavedState(Window win)
   if (!command)
     return NULL;
 
-  if (PropGetWMClass(win, &class, &instance)) {
+  if (wPropertiesGetWMClass(win, &class, &instance)) {
     while (wstate) {
       if (is_same(instance, wstate->instance) && is_same(class, wstate->class) &&
           is_same(command, wstate->command)) {
@@ -2938,7 +2955,7 @@ static void frameMouseDown(WObjDescriptor *desc, XEvent *event)
       return;
     }
     if (event->xbutton.button == Button3) {
-      wMouseResizeWindow(wwin, event);
+      wMouseResizeWindow(wwin, event, wPreferences.opaque_resize);
     } else if (event->xbutton.button == Button4) {
       new_height = wwin->client.height - resize_height_increment;
       wWindowConstrainSize(wwin, &wwin->client.width, &new_height);

@@ -44,34 +44,22 @@
 @end
 
 @implementation TerminalApplication
+
 - (void)sendEvent:(NSEvent *)e
 {
-  if ([e type] == NSKeyDown && 
-      [e modifierFlags] & NSCommandKeyMask &&
-      [[Defaults shared] alternateAsMeta])
-    {
-      NSDebugLLog(@"key",@"intercepting key equivalent");
-      [[e window] sendEvent:e];
-      return;
-    }
+  if ([e type] == NSKeyDown && [e modifierFlags] & NSCommandKeyMask &&
+      [[Defaults shared] alternateAsMeta]) {
+    NSDebugLLog(@"key", @"intercepting key equivalent");
+    [[e window] sendEvent:e];
+    return;
+  }
 
-  [super sendEvent: e];
+  [super sendEvent:e];
 }
-@end
 
+@end
 
 int main(int argc, const char **argv)
 {
-/*  CREATE_AUTORELEASE_POOL(arp);
-
-  [TerminalApplication sharedApplication];
-
-  [NSApp setDelegate: [[Terminal alloc] init]];
-  [NSApp run];
-
-  DESTROY(arp);
-  return 0;*/
-  
   return NSApplicationMain(argc, argv);
 }
-

@@ -28,11 +28,17 @@ $(FRAMEWORK_NAME)_HEADER_FILES = \
 	SystemKit.h\
 	OSESystemInfo.h\
 	\
+	OSEDefaults.h \
+	OSEFileManager.h \
 	OSEFileSystem.h \
 	OSEFileSystemMonitor.h \
 	\
 	OSEScreen.h \
 	OSEDisplay.h \
+	\
+	OSEBusConnection.h \
+	OSEBusMessage.h \
+	OSEBusService.h \
 	\
 	OSEDeviceManager.h \
 	OSEMediaManager.h \

@@ -258,29 +258,28 @@ static RETSIGTYPE _handleSig(int sig)
   /* wAbort(0); */
 }
 
-static RETSIGTYPE _buryChild(int foo)
+static RETSIGTYPE _childExitHandler(int foo)
 {
   pid_t pid;
   int status;
   int save_errno = errno;
   sigset_t sigs;
 
-  /* Parameter not used, but tell the compiler that it is ok */
-  (void)foo;
-
   sigfillset(&sigs);
-  /* Block signals so that NotifyDeadProcess() doesn't get fux0red */
+  /* Block signals so that wNotifyProcessExit() doesn't get fux0red */
   sigprocmask(SIG_BLOCK, &sigs, NULL);
 
-  /* R.I.P. */
   /* If 2 or more kids exit in a small time window, before this handler gets
    * the chance to get invoked, the SIGCHLD signals will be merged and only
    * one SIGCHLD signal will be sent to us. We use a while loop to get all
    * exited child status because we can't count on the number of SIGCHLD
    * signals to know exactly how many kids have exited. -Dan
    */
+  // CFLog(kCFLogLevelError, CFSTR("%s: error #%i -- saved_errno %i"), __func__, errno, save_errno);
+
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0 || (pid < 0 && errno == EINTR)) {
-    NotifyDeadProcess(pid, WEXITSTATUS(status));
+    // CFLog(kCFLogLevelError, CFSTR("%s: PID == %i exit status == %i"), __func__, pid, WEXITSTATUS(status));
+    wNotifyProcessExit(pid, status);
   }
 
   sigprocmask(SIG_UNBLOCK, &sigs, NULL);
@@ -306,8 +305,8 @@ static void _setupSignalHandling(void)
   sig_action.sa_flags = SA_RESTART;
   sigaction(SIGTERM, &sig_action, NULL);       // Logout panel - OK
   sigaction(SIGINT, &sig_action, NULL);        // Logout panel - OK
-  /* sigaction(SIGHUP, &sig_action, NULL); */  // managed by Desktop
-  /* sigaction(SIGUSR1, &sig_action, NULL);*/  // managed by Desktop
+  // sigaction(SIGHUP, &sig_action, NULL);        // managed by Workspace
+  // sigaction(SIGUSR1, &sig_action, NULL);       // managed by Workspace
   sigaction(SIGUSR2, &sig_action, NULL);       // WindowMaker reread defaults - OK
 
   /* ignore dead pipe */
@@ -321,7 +320,7 @@ static void _setupSignalHandling(void)
   sigaction(SIGPIPE, &sig_action, NULL);
 
   /* handle dead children */
-  sig_action.sa_handler = _buryChild;
+  sig_action.sa_handler = _childExitHandler;
   sig_action.sa_flags = SA_NOCLDSTOP | SA_RESTART;
   sigaction(SIGCHLD, &sig_action, NULL);
 
@@ -336,7 +335,7 @@ static void _setupSignalHandling(void)
   sigfillset(&sig_action.sa_mask);
   sigprocmask(SIG_UNBLOCK, &sig_action.sa_mask, NULL);
 
-  // Unmanage signals which are managed by GNUstep part of Desktop
+  // Unmanage signals which are managed by GNUstep part of Workspace
   signal(SIGHUP, SIG_IGN);   // NEXTSPACE
   signal(SIGUSR1, SIG_IGN);  // NEXTSPACE
 }
@@ -460,7 +459,7 @@ static void _initializeAtoms(void)
   w_global.atom.wmaker.state = XInternAtom(dpy, "_WINDOWMAKER_STATE", False);
   w_global.atom.wmaker.wm_protocols = XInternAtom(dpy, "_WINDOWMAKER_WM_PROTOCOLS", False);
   w_global.atom.wmaker.wm_function = XInternAtom(dpy, "_WINDOWMAKER_WM_FUNCTION", False);
-  w_global.atom.wmaker.noticeboard = XInternAtom(dpy, "_WINDOWMAKER_NOTICEBOARD", False);
+  // w_global.atom.wmaker.noticeboard = XInternAtom(dpy, "_WINDOWMAKER_NOTICEBOARD", False);
   w_global.atom.wmaker.command = XInternAtom(dpy, "_WINDOWMAKER_COMMAND", False);
   w_global.atom.wmaker.icon_size = XInternAtom(dpy, "_WINDOWMAKER_ICON_SIZE", False);
   w_global.atom.wmaker.icon_tile = XInternAtom(dpy, "_WINDOWMAKER_ICON_TILE", False);
@@ -722,9 +721,6 @@ void wStartUp(Bool defaultScreenOnly)
 
   scr = wScreen[0];
 
-  /* Center for notifications inside WM. */
-  scr->notificationCenter = CFNotificationCenterGetLocalCenter();
-
   /* Launching icons list */
   scr->launching_icons = CFArrayCreateMutable(kCFAllocatorDefault, 0, NULL);
 
@@ -789,30 +785,30 @@ void wInitialize(int argc, char **argv)
   wPreferences.flags.noclip = 1;
   wPreferences.flags.nodrawer = 1;
 
-  setlocale(LC_ALL, "");
+  // setlocale(LC_ALL, "");
 
-  if (w_global.locale) {
-    setenv("LANG", w_global.locale, 1);
-  } else {
-    w_global.locale = getenv("LC_ALL");
-    if (!w_global.locale) {
-      w_global.locale = getenv("LANG");
-    }
-  }
+  // if (w_global.locale) {
+  //   setenv("LANG", w_global.locale, 1);
+  // } else {
+  //   w_global.locale = getenv("LC_ALL");
+  //   if (!w_global.locale) {
+  //     w_global.locale = getenv("LANG");
+  //   }
+  // }
 
-  setlocale(LC_ALL, "");
+  // setlocale(LC_ALL, "");
 
-  if (!w_global.locale || strcmp(w_global.locale, "C") == 0 ||
-      strcmp(w_global.locale, "POSIX") == 0) {
-    w_global.locale = NULL;
-  } else {
-    char *ptr;
+  // if (!w_global.locale || strcmp(w_global.locale, "C") == 0 ||
+  //     strcmp(w_global.locale, "POSIX") == 0) {
+  //   w_global.locale = NULL;
+  // } else {
+  //   char *ptr;
 
-    w_global.locale = wstrdup(w_global.locale);
-    ptr = strchr(w_global.locale, '.');
-    if (ptr)
-      *ptr = 0;
-  }
+  //   w_global.locale = wstrdup(w_global.locale);
+  //   ptr = strchr(w_global.locale, '.');
+  //   if (ptr)
+  //     *ptr = 0;
+  // }
 
   /* open display */
   dpy = XOpenDisplay(DisplayName);
@@ -837,8 +833,8 @@ void wInitialize(int argc, char **argv)
     wSetWVisualID(0, (int)DefaultVisual(dpy, DefaultScreen(dpy))->visualid);
   }
 
-  DisplayName = XDisplayName(DisplayName);
-  setenv("DISPLAY", DisplayName, 1);
+  // DisplayName = XDisplayName(DisplayName);
+  // setenv("DISPLAY", DisplayName, 1);
 
   wXModifierInitialize();
 }

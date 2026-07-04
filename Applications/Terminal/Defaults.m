@@ -15,12 +15,12 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-  Defaults can provide access to user defaults file (~/L/P/Terminal.plist) and 
+  Defaults can provide access to user defaults file (~/L/P/Terminal.plist) and
   arbitrary file.
   Access to NSUserDefaults file:
-  	[Defaults shared];
+        [Defaults shared];
   Acess to arbitrary file:
-  	[[Defaults alloc] initWithFile:"~/path/to/filename"];
+        [[Defaults alloc] initWithFile:"~/path/to/filename"];
 
 */
 
@@ -32,6 +32,7 @@
 #import <DesktopKit/NXTAlert.h>
 
 #import "Terminal.h"
+#import "TerminalView.h"
 #import "Defaults.h"
 
 @implementation Defaults
@@ -41,44 +42,38 @@ static Defaults *shared = nil;
 // Get Defaults instance with NSUserDefaults preferences.
 + shared
 {
-  if (shared == nil)
-    {
-      shared = [self new];
-    }
+  if (shared == nil) {
+    shared = [self new];
+  }
   return shared;
 }
 
 + (NSString *)sessionsDirectory
 {
   NSFileManager *fm = [NSFileManager defaultManager];
-  NSString      *path;
-  BOOL          isDir;
-  
+  NSString *path;
+  BOOL isDir;
+
   // Assume that ~/Library already exists
   path = [NSString stringWithFormat:@"%@/Library/Terminal", NSHomeDirectory()];
 
-  if ([fm fileExistsAtPath:path isDirectory:&isDir])
-    {
-      if (!isDir)
-        {
-          NXTRunAlertPanel(@"Session Directory",
-                          @"%@ exists and not a directory.\n"
-                          "Check your home directory layout",
-                          @"Ok", nil, nil, path);
-          return nil;
-        }
+  if ([fm fileExistsAtPath:path isDirectory:&isDir]) {
+    if (!isDir) {
+      NXTRunAlertPanel(@"Session Directory",
+                       @"%@ exists and not a directory.\n"
+                        "Check your home directory layout",
+                       @"Ok", nil, nil, path);
+      return nil;
     }
-  else
-    {
-      if ([fm createDirectoryAtPath:path attributes:nil] == NO)
-        {
-          NXTRunAlertPanel(@"Session Directory",
-                          @"Error occured while creating directory %@.\n"
-                          "Check your home directory layout",
-                          @"Ok", nil, nil, path);
-          return nil;
-        }
+  } else {
+    if ([fm createDirectoryAtPath:path attributes:nil] == NO) {
+      NXTRunAlertPanel(@"Session Directory",
+                       @"Error occured while creating directory %@.\n"
+                        "Check your home directory layout",
+                       @"Ok", nil, nil, path);
+      return nil;
     }
+  }
 
   return path;
 }
@@ -88,9 +83,9 @@ static Defaults *shared = nil;
 {
   self = [super init];
 
-  filePath = nil;  
+  filePath = nil;
   defaults = [NSUserDefaults standardUserDefaults];
-  
+
   return self;
 }
 
@@ -98,7 +93,7 @@ static Defaults *shared = nil;
 - (id)initEmpty
 {
   self = [super init];
-  
+
   filePath = nil;
   defaults = [[NSMutableDictionary alloc] init];
 
@@ -109,18 +104,16 @@ static Defaults *shared = nil;
 // Create NSMutableDictionary and store it in 'defaults' ivar
 - (id)initWithFile:(NSString *)path
 {
-  if (path)
-    {
-      filePath = path;
-      defaults = [[NSMutableDictionary alloc] initWithContentsOfFile:filePath];
-    }
-  
-  if (defaults)
-    {
-      NSLog(@"Defaults: error loading file");
-      return nil;
-    }
- 
+  if (path) {
+    filePath = path;
+    defaults = [[NSMutableDictionary alloc] initWithContentsOfFile:filePath];
+  }
+
+  if (defaults) {
+    NSLog(@"Defaults: error loading file");
+    return nil;
+  }
+
   self = [super init];
 
   return self;
@@ -129,23 +122,18 @@ static Defaults *shared = nil;
 - (id)initWithDefaults:(id)def
 {
   self = [super init];
-  
-  if ([def isKindOfClass:[NSUserDefaults class]])
-    {
-      NSDictionary *udd = [def persistentDomainForName:@"Terminal"];
-      defaults = [[NSMutableDictionary alloc] initWithDictionary:udd
-                                                       copyItems:NO];
-    }
-  else
-    {
-      defaults = [[NSMutableDictionary alloc] initWithDictionary:def
-                                                       copyItems:NO];
-    }
+
+  if ([def isKindOfClass:[NSUserDefaults class]]) {
+    NSDictionary *udd = [def persistentDomainForName:@"Terminal"];
+    defaults = [[NSMutableDictionary alloc] initWithDictionary:udd copyItems:NO];
+  } else {
+    defaults = [[NSMutableDictionary alloc] initWithDictionary:def copyItems:NO];
+  }
 
   return self;
 }
 
-- (id)copyWithZone:(NSZone*)zone
+- (id)copyWithZone:(NSZone *)zone
 {
   Defaults *copy = [Defaults allocWithZone:zone];
 
@@ -160,11 +148,10 @@ static Defaults *shared = nil;
 
 - (NSDictionary *)dictionaryRep
 {
-  if ([defaults isKindOfClass:[NSUserDefaults class]])
-    {
-      return [defaults persistentDomainForName:@"Terminal"];
-    }
-  
+  if ([defaults isKindOfClass:[NSUserDefaults class]]) {
+    return [defaults persistentDomainForName:@"Terminal"];
+  }
+
   return defaults;
 }
 
@@ -175,21 +162,20 @@ static Defaults *shared = nil;
 
 - (BOOL)writeToFile:(NSString *)path atomically:(BOOL)atom
 {
-  if ([defaults isKindOfClass:[NSUserDefaults class]])
-    {
-      return [[defaults persistentDomainForName:@"Terminal"]
-               writeToFile:path atomically:YES];
-    }
-  
+  if ([defaults isKindOfClass:[NSUserDefaults class]]) {
+    return [[defaults persistentDomainForName:@"Terminal"] writeToFile:path atomically:YES];
+  }
+
   return [defaults writeToFile:path atomically:YES];
 }
 
 - (BOOL)synchronize
 {
-  if ([defaults isKindOfClass:[NSUserDefaults class]])
+  if ([defaults isKindOfClass:[NSUserDefaults class]]) {
     return [(NSUserDefaults *)defaults synchronize];
-  else
+  } else {
     return [defaults writeToFile:filePath atomically:YES];
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -201,8 +187,7 @@ static Defaults *shared = nil;
   return [defaults objectForKey:key];
 }
 
-- (void)setObject:(id)value
-           forKey:(NSString *)key
+- (void)setObject:(id)value forKey:(NSString *)key
 {
   [defaults setObject:value forKey:key];
   // [self setChanged];
@@ -218,17 +203,15 @@ static Defaults *shared = nil;
 {
   id obj = [self objectForKey:key];
 
-  if (obj != nil && ([obj isKindOfClass:[NSString class]]
-		  || [obj isKindOfClass:[NSNumber class]]))
-    {
-      return [obj floatValue];
-    }
+  if (obj != nil &&
+      ([obj isKindOfClass:[NSString class]] || [obj isKindOfClass:[NSNumber class]])) {
+    return [obj floatValue];
+  }
 
   return 0.0;
 }
 
-- (void)setFloat:(float)value
-          forKey:(NSString*)key
+- (void)setFloat:(float)value forKey:(NSString *)key
 {
   [self setObject:[NSNumber numberWithFloat:value] forKey:key];
 }
@@ -237,56 +220,48 @@ static Defaults *shared = nil;
 {
   id obj = [self objectForKey:key];
 
-  if (obj != nil && ([obj isKindOfClass:[NSString class]]
-		  || [obj isKindOfClass:[NSNumber class]]))
-    {
-      return [obj integerValue];
-    }
+  if (obj != nil &&
+      ([obj isKindOfClass:[NSString class]] || [obj isKindOfClass:[NSNumber class]])) {
+    return [obj integerValue];
+  }
 
   return -1;
 }
 
-- (void)setInteger:(NSInteger)value
-            forKey:(NSString *)key
+- (void)setInteger:(NSInteger)value forKey:(NSString *)key
 {
   [self setObject:[NSNumber numberWithInteger:value] forKey:key];
 }
 
-- (BOOL)boolForKey:(NSString*)key
+- (BOOL)boolForKey:(NSString *)key
 {
   id obj = [self objectForKey:key];
 
-  if (obj != nil && ([obj isKindOfClass:[NSString class]]
-		  || [obj isKindOfClass:[NSNumber class]]))
-    {
-      return [obj boolValue];
-    }
+  if (obj != nil &&
+      ([obj isKindOfClass:[NSString class]] || [obj isKindOfClass:[NSNumber class]])) {
+    return [obj boolValue];
+  }
 
   return NO;
 }
 
-- (void)setBool:(BOOL)value
-         forKey:(NSString*)key
+- (void)setBool:(BOOL)value forKey:(NSString *)key
 {
-  if (value == YES)
-    {
-      [self setObject:@"YES" forKey:key];
-    }
-  else
-    {
-      [self setObject:@"NO" forKey:key];
-    }
+  if (value == YES) {
+    [self setObject:@"YES" forKey:key];
+  } else {
+    [self setObject:@"NO" forKey:key];
+  }
 }
 
-- (NSString *)stringForKey:(NSString*)key
+- (NSString *)stringForKey:(NSString *)key
 {
   return [defaults objectForKey:key];
 }
 
 @end
 
-NSString *
-TerminalPreferencesDidChangeNotification = @"TerminalPreferencesDidChange";
+NSString *TerminalPreferencesDidChangeNotification = @"TerminalPreferencesDidChange";
 
 //----------------------------------------------------------------------------
 // Window
@@ -303,20 +278,17 @@ NSString *TerminalFontSizeKey = @"TerminalFontSize";
 + (NSFont *)boldTerminalFontForFont:(NSFont *)font
 {
   NSString *fName;
-  float    fSize;
-  NSFont   *boldFont;
-  
-  if (font != nil)
-    {
-      fName = [NSString stringWithFormat:@"%@-Bold", [font familyName]];
-      fSize = [font pointSize];
-      boldFont = [[[NSFont fontWithName:fName size:fSize] screenFont] retain];
-      // NSLog(@"Found Bold font: %f [%@]", fSize, [boldFont fontName]);
-    }
-  else
-    {
-      return font;
-    }
+  float fSize;
+  NSFont *boldFont;
+
+  if (font != nil) {
+    fName = [NSString stringWithFormat:@"%@-Bold", [font familyName]];
+    fSize = [font pointSize];
+    boldFont = [[[NSFont fontWithName:fName size:fSize] screenFont] retain];
+    // NSLog(@"Found Bold font: %f [%@]", fSize, [boldFont fontName]);
+  } else {
+    return font;
+  }
 
   return boldFont;
 }
@@ -324,15 +296,14 @@ NSString *TerminalFontSizeKey = @"TerminalFontSize";
 {
   NSSize s;
 
-  if (!font)
-    {
-      // font = [self terminalFont];
-      return NSZeroSize;
-    }
+  if (!font) {
+    // font = [self terminalFont];
+    return NSZeroSize;
+  }
 
   s = [font boundingRectForFont].size;
   s.width = [font advancementForGlyph:'M'].width;
-  
+
   // NSLog (@"Font %@ bounding rect: %@ XHeight: %f line height: %f",
   //        [font fontName], NSStringFromSize(s),
   //        [font xHeight], [font defaultLineHeightForFont]);
@@ -342,18 +313,19 @@ NSString *TerminalFontSizeKey = @"TerminalFontSize";
   //   {
   //     s.width = [font boundingRectForGlyph:'A'].size.width;
   //   }
-  
+
   return s;
 }
 
 - (int)windowWidth
 {
   NSInteger width = [self integerForKey:WindowWidthKey];
-  
-  if (width <= 0)
+
+  if (width <= 0) {
     return DEFAULT_COLUMNS;
-  else  
-    return width;
+  }
+
+  return width;
 }
 - (void)setWindowWidth:(int)width
 {
@@ -362,17 +334,18 @@ NSString *TerminalFontSizeKey = @"TerminalFontSize";
 - (int)windowHeight
 {
   NSInteger height = [self integerForKey:WindowHeightKey];
-  
-  if (height <= 0)
+
+  if (height <= 0) {
     return DEFAULT_LINES;
-  else
-    return height;
+  }
+
+  return height;
 }
 - (void)setWindowHeight:(int)height
 {
   [self setInteger:height forKey:WindowHeightKey];
 }
-- (WindowCloseBehavior)windowCloseBehavior // 'When Shell Exits'
+- (WindowCloseBehavior)windowCloseBehavior  // 'When Shell Exits'
 {
   return [self integerForKey:WindowCloseBehaviorKey];
 }
@@ -383,29 +356,26 @@ NSString *TerminalFontSizeKey = @"TerminalFontSize";
 - (NSFont *)terminalFont
 {
   NSString *fName;
-  float    fSize;
-  NSFont   *screenFont;
-  NSFont   *terminalFont;
-  
+  float fSize;
+  NSFont *screenFont;
+  NSFont *terminalFont;
+
   fSize = [self floatForKey:TerminalFontSizeKey];
   fName = [self stringForKey:TerminalFontKey];
-  if (!fSize)
-    {
+  if (!fSize) {
+    terminalFont = [NSFont userFixedPitchFontOfSize:fSize];
+  } else {
+    terminalFont = [NSFont fontWithName:fName size:fSize];
+    if (!terminalFont) {
       terminalFont = [NSFont userFixedPitchFontOfSize:fSize];
     }
-  else
-    {
-      terminalFont = [NSFont fontWithName:fName size:fSize];
-      if (!terminalFont)
-        {
-          terminalFont = [NSFont userFixedPitchFontOfSize:fSize];
-        }
-    }
+  }
 
-  if ((screenFont = [terminalFont screenFont]))
+  if ((screenFont = [terminalFont screenFont])) {
     return screenFont;
-  else
-    return terminalFont;
+  }
+
+  return terminalFont;
 }
 - (void)setTerminalFont:(NSFont *)font
 {
@@ -421,27 +391,24 @@ NSString *TerminalFontSizeKey = @"TerminalFontSize";
 NSString *TitleBarElementsMaskKey = @"TitleBarElementsMask";
 NSString *TitleBarCustomTitleKey = @"TitleBarCustomTitle";
 
-const NSUInteger TitleBarCustomTitle = 1<<0;
-const NSUInteger TitleBarShellPath   = 1<<1;
-const NSUInteger TitleBarDeviceName  = 1<<2;
-const NSUInteger TitleBarFileName    = 1<<3;
-const NSUInteger TitleBarWindowSize  = 1<<4;
-const NSUInteger TitleBarXTermTitle  = 1<<5;
+const NSUInteger TitleBarCustomTitle = 1 << 0;
+const NSUInteger TitleBarShellPath = 1 << 1;
+const NSUInteger TitleBarDeviceName = 1 << 2;
+const NSUInteger TitleBarFileName = 1 << 3;
+const NSUInteger TitleBarWindowSize = 1 << 4;
+const NSUInteger TitleBarXTermTitle = 1 << 5;
 
 @implementation Defaults (TitleBar)
 - (NSUInteger)titleBarElementsMask
 {
   NSUInteger titleBarElements;
-  
+
   titleBarElements = [self integerForKey:TitleBarElementsMaskKey];
-  if (!titleBarElements)
-    {
-      titleBarElements = TitleBarShellPath |
-                         TitleBarDeviceName |
-                         TitleBarXTermTitle |
-                         TitleBarWindowSize;
-    }
-  
+  if (!titleBarElements) {
+    titleBarElements =
+        TitleBarShellPath | TitleBarDeviceName | TitleBarXTermTitle | TitleBarWindowSize;
+  }
+
   return titleBarElements;
 }
 - (void)setTitleBarElementsMask:(NSUInteger)mask
@@ -451,12 +418,11 @@ const NSUInteger TitleBarXTermTitle  = 1<<5;
 - (NSString *)customTitle
 {
   NSString *titleBarCustomTitle;
-  
+
   titleBarCustomTitle = [self stringForKey:TitleBarCustomTitleKey];
-  if (!titleBarCustomTitle)
-    {
-      titleBarCustomTitle = @"Terminal";
-    }
+  if (!titleBarCustomTitle) {
+    titleBarCustomTitle = @"Terminal";
+  }
   return titleBarCustomTitle;
 }
 - (void)setCustomTitle:(NSString *)title
@@ -468,39 +434,37 @@ const NSUInteger TitleBarXTermTitle  = 1<<5;
 //----------------------------------------------------------------------------
 // Linux Emulation
 //---
-NSString *CharacterSetKey  = @"Linux_CharacterSet";
+NSString *CharacterSetKey = @"Linux_CharacterSet";
 NSString *UseMultiCellGlyphsKey = @"UseMultiCellGlyphs";
 NSString *AlternateAsMetaKey = @"AlternateAsMeta";
-NSString *DoubleEscapeKey  = @"DoubleEscape";
+NSString *DoubleEscapeKey = @"DoubleEscape";
 //---
 @implementation Defaults (Linux)
 - (NSString *)characterSet
 {
   NSString *characterSet;
-  
+
   characterSet = [self stringForKey:CharacterSetKey];
-  if (!characterSet)
-    {
-      characterSet = @"UTF-8";
-    }
+  if (!characterSet) {
+    characterSet = @"UTF-8";
+  }
   return characterSet;
 }
 - (void)setCharacterSet:(NSString *)cSet
 {
-  if (!cSet)
+  if (!cSet) {
     cSet = @"utf-8";
-    
+  }
   [self setObject:cSet forKey:CharacterSetKey];
 }
 - (BOOL)alternateAsMeta
-{ // Don't use boolForKey: we need to return YES if option is not set.
+{  // Don't use boolForKey: we need to return YES if option is not set.
   id obj = [self objectForKey:AlternateAsMetaKey];
 
-  if (obj != nil && ([obj isKindOfClass:[NSString class]]
-                     || [obj isKindOfClass:[NSNumber class]]))
-    {
-      return [obj boolValue];
-    }
+  if (obj != nil &&
+      ([obj isKindOfClass:[NSString class]] || [obj isKindOfClass:[NSNumber class]])) {
+    return [obj boolValue];
+  }
 
   return YES;
 }
@@ -549,34 +513,32 @@ NSString *TerminalFontUseBoldKey = @"TerminalFontUseBold";
 // Utility
 + (NSDictionary *)descriptionFromColor:(NSColor *)color
 {
-  NSColor  *rgbColor;
+  NSColor *rgbColor;
   NSNumber *redComponent;
   NSNumber *greenComponent;
   NSNumber *blueComponent;
   NSNumber *alphaComponent;
 
-  rgbColor =  [color colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
-  
+  rgbColor = [color colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
+
   redComponent = [NSNumber numberWithFloat:[rgbColor redComponent]];
   greenComponent = [NSNumber numberWithFloat:[rgbColor greenComponent]];
   blueComponent = [NSNumber numberWithFloat:[rgbColor blueComponent]];
   alphaComponent = [NSNumber numberWithFloat:[rgbColor alphaComponent]];
 
-  return [NSDictionary dictionaryWithObjectsAndKeys:
-                         redComponent, @"Red",
-                       greenComponent, @"Green",
-                       blueComponent,  @"Blue",
-                       alphaComponent, @"Alpha",
-                       nil];
+  return @{
+    @"Red" : redComponent,
+    @"Green" : greenComponent,
+    @"Blue" : blueComponent,
+    @"Alpha" : alphaComponent
+  };
 }
 + (NSColor *)colorFromDescription:(NSDictionary *)desc
 {
-
-  return [NSColor
-           colorWithCalibratedRed:[[desc objectForKey:@"Red"] floatValue]
-                            green:[[desc objectForKey:@"Green"] floatValue]
-                             blue:[[desc objectForKey:@"Blue"] floatValue]
-                            alpha:[[desc objectForKey:@"Alpha"] floatValue]];
+  return [NSColor colorWithCalibratedRed:[[desc objectForKey:@"Red"] floatValue]
+                                   green:[[desc objectForKey:@"Green"] floatValue]
+                                    blue:[[desc objectForKey:@"Blue"] floatValue]
+                                   alpha:[[desc objectForKey:@"Alpha"] floatValue]];
 }
 
 // - (const float *)brightnessForIntensities
@@ -591,8 +553,9 @@ NSString *TerminalFontUseBoldKey = @"TerminalFontUseBold";
 {
   NSInteger style = [self integerForKey:CursorStyleKey];
 
-  if (style < 0) style = 0;
-  
+  if (style < 0) {
+    style = 0;
+  }
   return style;
 }
 - (void)setCursorStyle:(int)style
@@ -602,44 +565,41 @@ NSString *TerminalFontUseBoldKey = @"TerminalFontUseBold";
 - (NSColor *)cursorColor
 {
   NSDictionary *desc = [defaults objectForKey:CursorColorKey];
-  
-  if (!desc)
+
+  if (!desc) {
     desc = [Defaults descriptionFromColor:[NSColor grayColor]];
- 
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setCursorColor:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:CursorColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:CursorColorKey];
 }
 - (NSColor *)windowBackgroundColor
 {
   NSDictionary *desc = [self objectForKey:WindowBGColorKey];
-  
-  if (!desc)
+
+  if (!desc) {
     desc = [Defaults descriptionFromColor:[NSColor whiteColor]];
-  
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setWindowBackgroundColor:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:WindowBGColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:WindowBGColorKey];
 }
 - (NSColor *)windowSelectionColor
 {
   NSDictionary *desc = [self objectForKey:SelectionBGColorKey];
-  
-  if (!desc)
-    desc = [Defaults descriptionFromColor:[NSColor lightGrayColor]];
 
+  if (!desc) {
+    desc = [Defaults descriptionFromColor:[NSColor lightGrayColor]];
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setWindowSelectionColor:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:SelectionBGColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:SelectionBGColorKey];
 }
 // TODO:
 - (BOOL)isCursorBlinking
@@ -653,72 +613,67 @@ NSString *TerminalFontUseBoldKey = @"TerminalFontUseBold";
 - (NSColor *)textNormalColor
 {
   NSDictionary *desc = [self objectForKey:TextNormalColorKey];
-  
-  if (!desc)
-    desc = [Defaults descriptionFromColor:[NSColor blackColor]];
 
+  if (!desc) {
+    desc = [Defaults descriptionFromColor:[NSColor blackColor]];
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setTextNormalColor:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:TextNormalColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:TextNormalColorKey];
 }
 - (NSColor *)textBoldColor
 {
   NSDictionary *desc = [self objectForKey:TextBoldColorKey];
-  
-  if (!desc)
-    desc = [Defaults descriptionFromColor:[NSColor blackColor]];
 
+  if (!desc) {
+    desc = [Defaults descriptionFromColor:[NSColor blackColor]];
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setTextBoldColor:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:TextBoldColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:TextBoldColorKey];
 }
 - (NSColor *)textBlinkColor
 {
   NSDictionary *desc = [self objectForKey:TextBlinkColorKey];
 
-  if (!desc)
+  if (!desc) {
     desc = [Defaults descriptionFromColor:[NSColor yellowColor]];
-  
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setTextBlinklColor:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:TextBlinkColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:TextBlinkColorKey];
 }
 - (NSColor *)textInverseBackground
 {
   NSDictionary *desc = [self objectForKey:TextInverseBGColorKey];
-  
-  if (!desc)
-    desc = [Defaults descriptionFromColor:[NSColor darkGrayColor]];
 
+  if (!desc) {
+    desc = [Defaults descriptionFromColor:[NSColor darkGrayColor]];
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setTextInverseBackground:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:TextInverseBGColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:TextInverseBGColorKey];
 }
 - (NSColor *)textInverseForeground
 {
   NSDictionary *desc = [self objectForKey:TextInverseFGColorKey];
 
-  if (!desc)
+  if (!desc) {
     desc = [Defaults descriptionFromColor:[NSColor whiteColor]];
-
+  }
   return [[Defaults colorFromDescription:desc] retain];
 }
 - (void)setTextInverseForeground:(NSColor *)color
 {
-  [self setObject:[Defaults descriptionFromColor:color]
-           forKey:TextInverseFGColorKey];
+  [self setObject:[Defaults descriptionFromColor:color] forKey:TextInverseFGColorKey];
 }
 - (BOOL)useBoldTerminalFont
 {
@@ -741,49 +696,36 @@ NSString *ScrollBottomOnInputKey = @"ScrollBottomOnInput";
 @implementation Defaults (Display)
 - (int)scrollBackLines
 {
-  if ([self objectForKey:ScrollBackLinesKey] == nil)
-    {
-      [self setInteger:256 forKey:ScrollBackLinesKey];
-    }
-  
+  if ([self boolForKey:ScrollBackEnabledKey] == NO) {
+    return 0;
+  } else if ([self boolForKey:ScrollBackUnlimitedKey] != NO) {
+    return SCROLLBACK_MAX;
+  } else if ([self objectForKey:ScrollBackLinesKey] == nil) {
+    return SCROLLBACK_DEFAULT;
+  }
+
   return [self integerForKey:ScrollBackLinesKey];
 }
 - (void)setScrollBackLines:(int)lines
 {
   NSUInteger scrollBackLines;
-  
-  if ([self scrollBackEnabled] == YES)
-    {
-      if ([self scrollBackUnlimited] == YES)
-        {
-          // TODO: now TerminalView allocates memory for to hold all lines
-          // at start (-init). If caluculations is based on INT_MAX TerminalView
-          // needs to allocate ~2GB of RAM. So TerminalView memory management
-          // must be rewritten to lazy allocating before "Unlimited" options
-          // can be used. For now it's hardocded to some reasonable value.
-          // scrollBackLines =
-          //   (INT_MAX-1)/([self defaultWindowWidth]*sizeof(screen_char_t));
-          // fprintf(stderr, "scrollBackLines=%i\n", scrollBackLines);
-          scrollBackLines = 1024;
-        }
-      else // scrollback limited
-        {
-          scrollBackLines = lines;
-          if (scrollBackLines <= 0) scrollBackLines = 256;
-        }
-    }
-  else // scrollback disabled
-    {
+
+  if ([self scrollBackEnabled] == YES) {
+    scrollBackLines = lines;
+    if (scrollBackLines < 0) {
       scrollBackLines = 0;
     }
-  
+  } else {  // scrollback disabled
+    scrollBackLines = 0;
+  }
+
   [self setInteger:scrollBackLines forKey:ScrollBackLinesKey];
 }
 - (BOOL)scrollBackEnabled
 {
-  if ([self objectForKey:ScrollBackEnabledKey] == nil)
+  if ([self objectForKey:ScrollBackEnabledKey] == nil) {
     [self setScrollBackEnabled:YES];
-    
+  }
   return [self boolForKey:ScrollBackEnabledKey];
 }
 - (void)setScrollBackEnabled:(BOOL)yn
@@ -792,12 +734,12 @@ NSString *ScrollBottomOnInputKey = @"ScrollBottomOnInput";
 }
 - (BOOL)scrollBackUnlimited
 {
-  if ([self scrollBackEnabled] == NO)
+  if ([self scrollBackEnabled] == NO) {
     return NO;
-
-  if ([self objectForKey:ScrollBackUnlimitedKey] == nil)
+  }
+  if ([self objectForKey:ScrollBackUnlimitedKey] == nil) {
     [self setBool:NO forKey:ScrollBackUnlimitedKey];
-  
+  }
   return [self boolForKey:ScrollBackUnlimitedKey];
 }
 - (void)setScrollBackUnlimited:(BOOL)yn
@@ -806,9 +748,9 @@ NSString *ScrollBottomOnInputKey = @"ScrollBottomOnInput";
 }
 - (BOOL)scrollBottomOnInput
 {
-  if ([self objectForKey:ScrollBottomOnInputKey] == nil)
+  if ([self objectForKey:ScrollBottomOnInputKey] == nil) {
     [self setBool:YES forKey:ScrollBottomOnInputKey];
-  
+  }
   return [self boolForKey:ScrollBottomOnInputKey];
 }
 - (void)setScrollBottomOnInput:(BOOL)yn
@@ -817,6 +759,52 @@ NSString *ScrollBottomOnInputKey = @"ScrollBottomOnInput";
 }
 
 @end
+
+//----------------------------------------------------------------------------
+// Activity Monitor
+//---
+NSString *ActivityMonitorEnabledKey = @"ActivityMonitorEnabled";
+NSString *IsBackgroundProcessesCleanKey = @"IsBackgroundProcessesClean";
+NSString *CleanCommandsKey = @"CleanCommands";
+
+@implementation Defaults (ActivityMonitor)
+- (BOOL)isActivityMonitorEnabled
+{
+  if ([self objectForKey:ActivityMonitorEnabledKey] == nil) {
+    [self setIsActivityMonitorEnabled:YES];
+  }
+  return [self boolForKey:ActivityMonitorEnabledKey];
+}
+- (void)setIsActivityMonitorEnabled:(BOOL)yn
+{
+  [self setBool:yn forKey:ActivityMonitorEnabledKey];
+}
+
+- (BOOL)isBackgroundProcessesClean
+{
+  if ([self objectForKey:IsBackgroundProcessesCleanKey] == nil) {
+    [self setIsBackgroundProcessesClean:YES];
+  }
+  return [self boolForKey:IsBackgroundProcessesCleanKey];  
+}
+- (void)setIsBackgroundProcessesClean:(BOOL)yn
+{
+  [self setBool:yn forKey:IsBackgroundProcessesCleanKey];
+}
+
+- (NSArray *)cleanCommands
+{
+  if ([self objectForKey:CleanCommandsKey] == nil) {
+    [self setCleanCommands:@[ @"ssh", @"telnet", @"rlogin" ]];
+  }
+  return [self objectForKey:CleanCommandsKey];
+}
+- (void)setCleanCommands:(NSArray *)list
+{
+  [self setObject:list forKey:CleanCommandsKey];
+}
+@end
+
 
 //----------------------------------------------------------------------------
 // Shell
@@ -828,13 +816,13 @@ NSString *LoginShellKey = @"LoginShell";
 - (NSString *)shell
 {
   NSString *shell = [self stringForKey:ShellKey];
-  
-  if (!shell && getenv("SHELL"))
-    shell = [NSString stringWithCString: getenv("SHELL")];
 
-  if (!shell)
+  if (!shell && getenv("SHELL")) {
+    shell = [NSString stringWithCString:getenv("SHELL")];
+  }
+  if (!shell) {
     shell = @"/bin/sh";
-  
+  }
   return shell;
 }
 - (void)setShell:(NSString *)sh
@@ -863,9 +851,9 @@ NSString *WordCharactersKey = @"WordCharacters";
 }
 - (void)setWordCharacters:(NSString *)characters
 {
-  if (characters == nil)
+  if (characters == nil) {
     characters = @"";
-
+  }
   [self setObject:characters forKey:WordCharactersKey];
 }
 @end
@@ -880,9 +868,9 @@ NSString *HideOnAutolaunchKey = @"HideOnAutolaunch";
 @implementation Defaults (Startup)
 - (StartupAction)startupAction
 {
-  if ([self integerForKey:StartupActionKey] == -1)
+  if ([self integerForKey:StartupActionKey] == -1) {
     [self setStartupAction:OnStartCreateShell];
-  
+  }
   return [self integerForKey:StartupActionKey];
 }
 - (void)setStartupAction:(StartupAction)action

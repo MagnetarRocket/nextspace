@@ -1,15 +1,13 @@
 #!/bin/sh
 # -*-Shell-script-*-
 
-. `dirname $0`/functions
+BUILD_RPM=1
+. `dirname $0`/../functions.sh
+. `dirname $0`/../environment.sh
+. /Developer/Makefiles/GNUstep.sh
+. /etc/profile.d/nextspace.sh
 
-if [ $# -eq 0 ];then
-    print_help
-    exit 1
-fi
-
-REPO_DIR=$1
-SPEC_FILE=${REPO_DIR}/Libraries/libwraster/libwraster.spec
+SPEC_FILE=${PROJECT_DIR}/Packaging/RedHat/SPECS/libwraster.spec
 
 print_H1 " Building Raster graphics library (libwraster) RPM..."
 
@@ -19,17 +17,17 @@ sudo yum -y install ${DEPS}
 
 print_H2 "===== Downloading libwraster sources..."
 source /Developer/Makefiles/GNUstep.sh
-cd ${REPO_DIR}/Libraries/libwraster && make dist
+cd ${PROJECT_DIR}/Libraries/libwraster && make dist
 cd $CWD
 WRASTER_VERSION=`rpmspec -q --qf "%{version}:" ${SPEC_FILE} | awk -F: '{print $1}'`
-mv ${REPO_DIR}/Libraries/libwraster-${WRASTER_VERSION}.tar.gz ${SOURCES_DIR}
+mv ${PROJECT_DIR}/Libraries/libwraster-${WRASTER_VERSION}.tar.gz ${RPM_SOURCES_DIR}
 
 spectool -g -R ${SPEC_FILE}
 print_H2 "===== Building libwraster RPM..."
-rpmbuild -bb ${SPEC_FILE}
+run_rpmbuild ${SPEC_FILE} "$@"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then 
-    WRASTER_VERSION=`rpm_version ${SPEC_FILE}`
+    WRASTER_VERSION=`rpm_version ${SPEC_FILE} "$@"`
     print_OK " Building libwraster RPM SUCCEEDED!"
 
     install_rpm libwraster ${RPMS_DIR}/libwraster-${WRASTER_VERSION}.rpm

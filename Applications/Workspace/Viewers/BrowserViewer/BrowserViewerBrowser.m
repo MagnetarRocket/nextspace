@@ -39,7 +39,7 @@ static NSTimer *clickTimer = nil;
   NSInteger rowsNum = [matrix numberOfRows];
   int       i;
 
-  NSLog(@"[BrowserViewerBrowser] emptyColumn:%li", number);
+  NSDebugLLog(@"BrowserViewer", @"[BrowserViewerBrowser] emptyColumn:%li", number);
 
   while([matrix numberOfRows])
     {
@@ -65,7 +65,7 @@ static NSTimer *clickTimer = nil;
     ch = [characters characterAtIndex:0];
   }
   
-  NSLog(@"%c", ch);
+  NSDebugLLog(@"BrowserViewer", @"%c", ch);
 
   if (ch == NSCarriageReturnCharacter ||
       ch == NSNewlineCharacter ||
@@ -78,11 +78,11 @@ static NSTimer *clickTimer = nil;
     return;
   }
   else if (ch == NSUpArrowFunctionKey) {
-    NSLog(@"keyDown: UpArrow");
+    NSDebugLLog(@"BrowserViewer", @"keyDown: UpArrow");
     return;
   }
   else if (ch == NSDownArrowFunctionKey) {
-    NSLog(@"keyDown: DownArrow");
+    NSDebugLLog(@"BrowserViewer", @"keyDown: DownArrow");
     return;
   }
 //     else if (character == NSLeftArrowFunctionKey)
@@ -93,7 +93,7 @@ static NSTimer *clickTimer = nil;
 //       NSInteger selectedC = [self selectedColumn];
 //       NSInteger firstVC = [self firstVisibleColumn];
 
-//       NSLog(@"1. [BrowserViewerBrowser] lastC: %i selectedC: %i lastVC: %i firstVC: %i",
+//       NSDebugLLog(@"BrowserViewer", @"1. [BrowserViewerBrowser] lastC: %i selectedC: %i lastVC: %i firstVC: %i",
 // 	    lastC, selectedC, lastVC, firstVC);
 
 //       [super keyDown:ev];
@@ -136,7 +136,7 @@ static NSTimer *clickTimer = nil;
           }
       }
       
-      // NSLog(@"selectedColumn: %i", selectedColumn);
+      // NSDebugLLog(@"BrowserViewer", @"selectedColumn: %i", selectedColumn);
       
       if (selectedColumn != -1)
         {
@@ -182,18 +182,17 @@ static NSTimer *clickTimer = nil;
                 }
             }
 
-          // NSLog(@"_charBuffer: %@ _lastKeyPressed:%f(%f) selected:%i",
-          //       _charBuffer, _lastKeyPressed, [ev timestamp], s);
+            // NSDebugLLog(@"BrowserViewer", @"_charBuffer: %@ _lastKeyPressed:%f(%f) selected:%i",
+            //             _charBuffer, _lastKeyPressed, [ev timestamp], s);
 
-          _alphaNumericalLastColumn = selectedColumn;
-          _lastKeyPressed = [ev timestamp];
+            _alphaNumericalLastColumn = selectedColumn;
+            _lastKeyPressed = [ev timestamp];
 
-          //[[self loadedCellAtRow:column:] stringValue]
-          sv = [((*lcarc)(self, lcarcSel, s, selectedColumn)) stringValue];
+            //[[self loadedCellAtRow:column:] stringValue]
+            sv = [((*lcarc)(self, lcarcSel, s, selectedColumn)) stringValue];
 
-          // selected cell aleady contains typed string - _charBuffer
-          if (([sv length] > 0) && ([sv hasPrefix:_charBuffer]))
-            {
+            // selected cell aleady contains typed string - _charBuffer
+            if (([sv length] > 0) && ([sv hasPrefix:_charBuffer])) {
               return;
             }
 
@@ -245,7 +244,7 @@ static NSTimer *clickTimer = nil;
   int lastVisibleC;
   int lastSelectedC;
   
-  // NSLog(@"<BrowserViewerBrowser> becomeFirstResponder");
+  NSDebugLLog(@"BrowserViewer", @"<BrowserViewerBrowser> becomeFirstResponder");
 
   lastVisibleC = [self lastVisibleColumn];
   lastSelectedC = [self selectedColumn];

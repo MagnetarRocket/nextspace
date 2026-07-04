@@ -33,7 +33,7 @@
 #import "PathView.h"
 #import "PathViewScroller.h"
 
-@class NXTIconView, NXTIcon, NXTIconLabel;
+@class NXTIconView, NXTIcon, NXTIconLabel, ProcessManager;
 
 @interface FileViewer : NSObject
 {
@@ -50,6 +50,8 @@
   OSEFileSystemMonitor *fileSystemMonitor;  // File system events
   NSNumber *monitorPathDescriptor;          // file descriptor for path
 
+  ProcessManager *processManager;
+
   NSWindow *window;
   id box;
   id scrollView;
@@ -63,8 +65,6 @@
 
   int setEditedStateCount;
 
-  //  PathViewScroller *scroller;
-  id<Viewer> viewer;
   NSLock *lock;
 
   NSTimer *checkTimer;
@@ -77,6 +77,8 @@
   NXTIconView *draggedSource;
   PathIcon *draggedIcon;
 }
+
+@property (readwrite, retain) id<Viewer> viewer;
 
 - initRootedAtPath:(NSString *)aRootPath viewer:(NSString *)viewerType isRoot:(BOOL)isRoot;
 

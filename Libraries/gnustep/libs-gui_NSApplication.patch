@@ -1,46 +1,59 @@
---- a/Source/NSApplication.m	2022-12-29 04:05:31.000000000 -0500
-+++ b/Source/NSApplication.m	2023-10-03 22:13:27.898321425 -0500
-@@ -2530,6 +2530,9 @@
+# Changes
+# 2024-06-04  Sergii Stoian  <stoyan255@gmail.com>
+#	* Deactivate application only if window manager accepted hide action.
+#	* Change "Hide/Unhide" menu item title depending on app state.
+#	* Call unhide: if hide: was called on hidden app. Actually it's always the case
+#	  because menu item bound to -hide: method.
+
+diff --git a/Source/NSApplication.m b/Source/NSApplication.m
+index 63152aecc..3fdfe70f8 100644
+--- a/Source/NSApplication.m
++++ b/Source/NSApplication.m
+@@ -2544,6 +2544,12 @@ image.</p><p>See Also: -applicationIconImage</p>
                    [_hidden addObject: win];
                    [win orderOut: self];
                  }
-+              /* On hiding we also deactivate the application which will make 
-+                 the menus go away too. */
-+              [self deactivate];
-             }
++                /*
++                 * On hiding we also deactivate the application which will make
++                 * the menus go away too.
++                 */
++                [self deactivate];
++                _unhide_on_activation = YES;	  
+ 	    }
+ 	  menuItem = [sender isKindOfClass:[NSMenuItem class]]
+ 		       ? sender
+@@ -2551,9 +2557,8 @@ image.</p><p>See Also: -applicationIconImage</p>
+ 	  if (menuItem)
+ 	    {
+ 	      [menuItem setAction:@selector(unhide:)];
+-	      [menuItem setTitle:_(@"Show")];
+-	    }
+-
++	      [menuItem setTitle:_(@"Unhide")];
++            }
  	  _app_is_hidden = YES;
  	  
-@@ -2552,12 +2555,9 @@
- 	    {
+ 	  if (YES == [[NSUserDefaults standardUserDefaults]
+@@ -2576,13 +2581,6 @@ image.</p><p>See Also: -applicationIconImage</p>
  	      [[_app_icon_window contentView] setNeedsDisplay: YES];
  	    }
-+
-+          [[_main_menu itemWithTitle:@"Hide"] setTitle:@"Unhide"];
  	  
 -	  /*
 -	   * On hiding we also deactivate the application which will make the menus
 -	   * go away too.
 -	   */
 -	  [self deactivate];
- 	  _unhide_on_activation = YES;
- 	  
+-	  _unhide_on_activation = YES;
+-	  
  	  info = [self _notificationUserInfo];
-@@ -2577,6 +2577,10 @@
- 	  [self miniaturizeAll: sender];
- 	}
-     }
-+  else
-+    {
-+      [self unhide:sender];
-+    }
- #endif
- }
- 
-@@ -2595,6 +2599,7 @@
+ 	  [nc postNotificationName: NSApplicationDidHideNotification
+ 			    object: self
+@@ -2618,7 +2616,7 @@ image.</p><p>See Also: -applicationIconImage</p>
  {
-   if (_app_is_hidden)
+   id<NSMenuItem> menuItem = [sender isKindOfClass:[NSMenuItem class]]
+ 			      ? sender
+-			      : [_main_menu itemWithTitle:_(@"Show")];
++			      : [_main_menu itemWithTitle:_(@"Unhide")];
+   if (menuItem)
      {
-+      [[_main_menu itemWithTitle:@"Unhide"] setTitle:@"Hide"];
-       [self unhideWithoutActivation];
-       _unhide_on_activation = NO;
-     }
+       [menuItem setAction:@selector(hide:)];

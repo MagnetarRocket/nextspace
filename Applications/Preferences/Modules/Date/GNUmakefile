@@ -17,7 +17,6 @@ $(BUNDLE_NAME)_STANDARD_INSTALL = no
 $(BUNDLE_NAME)_HEADER = \
 	Date.h \
 	Calendar.h \
-	Clock.h \
 	TimeView.h
 
 #
@@ -26,7 +25,6 @@ $(BUNDLE_NAME)_HEADER = \
 $(BUNDLE_NAME)_OBJC_FILES = \
 	Date.m \
 	Calendar.m \
-	Clock.m \
 	TimeView.m
 
 #
@@ -38,11 +36,7 @@ $(BUNDLE_NAME)_RESOURCE_FILES = \
 	Resources/daysH.tiff \
 	Resources/world.tiff \
 	Resources/weeks.tiff \
-	Resources/left.tiff \
-	Resources/leftH.tiff \
-	Resources/right.tiff \
-	Resources/rightH.tiff \
-	Resources/ClockView.tiff \
+	Resources/weeksMonday.tiff \
 	Resources/clockbits.tiff \
 	Resources/bundle.registry
 

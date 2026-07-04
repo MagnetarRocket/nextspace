@@ -29,26 +29,27 @@
 #import <Foundation/Foundation.h>
 
 // Events
-extern NSString *OSEDiskAppeared;
-extern NSString *OSEDiskDisappeared;
-extern NSString *NXVolumeAppeared;
-extern NSString *NXVolumeDisappeared;
-extern NSString *NXVolumeMounted;
-extern NSString *NXVolumeUnmounted;
+extern NSString *OSEMediaDriveDidAddNotification;
+extern NSString *OSEMediaDriveDidRemoveNotification;
+extern NSString *OSEMediaVolumeDidAddNotification;
+extern NSString *OSEMediaVolumeDidRemoveNotification;
+extern NSString *OSEMediaVolumeDidMountNotification;
+extern NSString *OSEMediaVolumeDidUnmountNotification;
 
-extern NSString *OSEMediaOperationDidStart;
-extern NSString *OSEMediaOperationDidUpdate;
-extern NSString *OSEMediaOperationDidEnd;
+extern NSString *OSEMediaOperationDidStartNotification;
+extern NSString *OSEMediaOperationDidUpdateNotification;
+extern NSString *OSEMediaOperationDidEndNotification;
 
 // Filesystem types
-typedef enum
-{
-  NXTFSTypeNTFS = 0,
-  NXTFSTypeFAT  = 1,
-  NXTFSTypeUDF  = 2,
-  NXTFSTypeUFS  = 3,
-  NXTFSTypeISO  = 4,
-  NXTFSTypeSwap = 5
+typedef enum {
+  NXTFSTypeEXT = 0,
+  NXTFSTypeXFS = 1,
+  NXTFSTypeNTFS = 2,
+  NXTFSTypeFAT = 3,
+  NXTFSTypeUDF = 4,
+  NXTFSTypeUFS = 5,
+  NXTFSTypeISO = 6,
+  NXTFSTypeSwap = 7
 } NXTFSType;
 
 // Class which adopts <MediaManager> protocol aimed to implement
